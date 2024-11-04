@@ -10,32 +10,21 @@ class CablyAIError(Exception):
 
 class ModelListView(View):
     def __init__(self, model_ids):
-        super().__init__(timeout=60)  # View timeout of 60 seconds
+        super().__init__(timeout=60)
         self.model_ids = model_ids
         self.current_page = 0
 
     @discord.ui.button(label="◀️ Previous", style=discord.ButtonStyle.primary)
-    async def previous_button(self, button: Button, interaction: discord.Interaction):
+    async def previous_button(self, button: discord.ui.Button, interaction: discord.Interaction):
         if self.current_page > 0:
             self.current_page -= 1
             await self.update_message(interaction)
 
     @discord.ui.button(label="Next ▶️", style=discord.ButtonStyle.primary)
-    async def next_button(self, button: Button, interaction: discord.Interaction):
-        if self.current_page < len(self.model_ids) // 10:  # Assuming 10 items per page
+    async def next_button(self, button: discord.ui.Button, interaction: discord.Interaction):
+        if self.current_page < len(self.model_ids) // 10:
             self.current_page += 1
             await self.update_message(interaction)
-
-    async def update_message(self, interaction):
-        start_index = self.current_page * 10
-        end_index = start_index + 10
-        page_content = "\n".join(self.model_ids[start_index:end_index])
-        await interaction.response.edit_message(content=f"**Available Models:**\n{page_content}", view=self)
-
-    async def on_timeout(self):
-        for button in self.children:
-            button.disabled = True
-        await self.message.edit(content="This view has timed out.", view=self)
 
 class core(commands.Cog):
     """AI-powered cog for listing models and generating images"""
