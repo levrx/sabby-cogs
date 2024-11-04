@@ -3,7 +3,7 @@ import asyncio
 from redbot.core import commands
 from redbot.core.bot import Red
 import discord
-from discord.ui import View, Button
+from discord.ui import View, button
 
 class CablyAIError(Exception):
     pass
@@ -13,6 +13,18 @@ class ModelListView(View):
         super().__init__(timeout=60)
         self.model_ids = model_ids
         self.current_page = 0
+        self.page_size = 10  # Adjust this for how many models you want per page
+
+    async def update_message(self, interaction: discord.Interaction):
+        start_index = self.current_page * self.page_size
+        end_index = start_index + self.page_size
+        models_to_show = self.model_ids[start_index:end_index]
+
+        models_description = "\n".join(models_to_show)
+        embed = discord.Embed(title="Available Models", description=models_description)
+
+        # Update the message with the new embed
+        await interaction.response.edit_message(embed=embed)
 
     @discord.ui.button(label="◀️ Previous", style=discord.ButtonStyle.primary)
     async def previous_button(self, button: discord.ui.Button, interaction: discord.Interaction):
@@ -22,11 +34,11 @@ class ModelListView(View):
 
     @discord.ui.button(label="Next ▶️", style=discord.ButtonStyle.primary)
     async def next_button(self, button: discord.ui.Button, interaction: discord.Interaction):
-        if self.current_page < len(self.model_ids) // 10:
+        if (self.current_page + 1) * self.page_size < len(self.model_ids):
             self.current_page += 1
             await self.update_message(interaction)
 
-class core(commands.Cog):
+class Core(commands.Cog):
     """AI-powered cog for listing models and generating images"""
 
     API_BASE_URL = "https://cablyai.com/v1"
@@ -37,7 +49,7 @@ class core(commands.Cog):
     async def initialize_tokens(self):
         self.tokens = await self.bot.get_shared_api_tokens("CablyAI")
         if not self.tokens.get("api_key"):
-            raise CablyAIError("Setup not done. Use `set api CablyAI api_key <your api key>`.") 
+            raise CablyAIError("Setup not done. Use `set api CablyAI api_key <your api key>`.")
 
     async def cog_load(self):
         await self.initialize_tokens()
@@ -67,7 +79,9 @@ class core(commands.Cog):
                             model_ids = [model['id'] for model in models_data["data"]]
                             # Create and send the model list view with pagination
                             view = ModelListView(model_ids)
-                            await ctx.send(content="**Available Models:**", view=view)
+                            embed = discord.Embed(title="Available Models", description="")
+                            await ctx.send(embed=embed, view=view)
+                            await view.update_message(await ctx.channel.send(embed=embed))
                         else:
                             await ctx.send("Failed to load models. Expected a list.")
                     else:
@@ -79,11 +93,10 @@ class core(commands.Cog):
 
     async def generate_image(self, ctx, prompt: str):
         """Generates an image based on the given prompt asynchronously."""
-        # Ask the user which model to use
         await ctx.send("Please provide the model ID you want to use for generating the image.")
         try:
-            msg = await ctx.bot.wait_for('message', timeout=60.0, check=lambda message: message.author == ctx.author)
-            model_id = msg.content.strip()  # Get the model ID from the user's message
+            msg = await self.bot.wait_for('message', timeout=60.0, check=lambda message: message.author == ctx.author)
+            model_id = msg.content.strip()
 
             async with aiohttp.ClientSession() as session:
                 payload = {
@@ -91,7 +104,7 @@ class core(commands.Cog):
                     "n": 1,
                     "size": "1024x1024",
                     "response_format": "url",
-                    "model": model_id  # Use the user-provided model ID
+                    "model": model_id
                 }
                 headers = {
                     "Authorization": f"Bearer {self.tokens['api_key']}",
