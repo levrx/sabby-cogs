@@ -1,58 +1,82 @@
 import io
-import aiohttp
+import requests
 from redbot.core import commands
 from redbot.core.bot import Red
+from redbot.core.utils.views import SetApiView
 import discord
 
-class DiffusionError(discord.errors.DiscordException):
+class CablyAIError(discord.errors.DiscordException):
     pass
 
 class core(commands.Cog):
-    """cably ai cog"""
+    """AI-powered cog for listing models and generating images"""
+
+    __author__ = ["your_username"]  # Replace with your Discord username or ID
+    __version__ = "0.1.0"
+
+    API_BASE_URL = "https://cablyai.com/v1"
 
     def __init__(self, bot: Red):
         self.bot = bot
-        self.api_base_url = "https://cablyai.com/v1"
-        self.session: aiohttp.ClientSession = aiohttp.ClientSession()
-        self.tokens = None
 
     async def initialize_tokens(self):
         self.tokens = await self.bot.get_shared_api_tokens("CablyAI")
         if not self.tokens.get("api_key"):
-            raise DiffusionError("Setup not done. Use `set api CablyAI api_key <your api key>`.")
+            raise CablyAIError("Setup not done. Use `set api CablyAI api_key <your api key>`.")
+
+    def format_help_for_context(self, ctx: commands.Context) -> str:
+        pre_processed = super().format_help_for_context(ctx) or ""
+        n = "\n" if "\n\n" not in pre_processed else ""
+        text = [
+            f"{pre_processed}{n}",
+            f"Cog Version: **{self.__version__}**",
+            f"Author: **{self.__author__}**",
+        ]
+        return "\n".join(text)
 
     async def cog_load(self) -> None:
         await self.initialize_tokens()
 
-    async def cog_unload(self) -> None:
-        if self.session:
-            await self.session.close()
+    @commands.command()
+    async def cably(self, ctx: commands.Context, action: str, *, args: str = ""):
+        """Handles the main commands for CablyAI.
 
-    @commands.command(name="cably")
-    async def cably_command(self, ctx, subcommand: str, *, args: str = ""):
-        if subcommand == "list_models":
+        Actions:
+        - list_models: List available models.
+        - generate_image: Generate an image based on a prompt.
+        """
+        if action.lower() == "list_models":
             await self.list_models(ctx)
-        elif subcommand == "generate_image":
+        elif action.lower() == "generate_image":
             await self.generate_image(ctx, args)
         else:
-            await ctx.send("Invalid subcommand. Use `!cably list_models` or `!cably generate_image <prompt>`.")
+            await ctx.send("Invalid action. Use `list_models` or `generate_image`.")
 
     async def list_models(self, ctx):
-        """we love models"""
+        """Lists available AI models."""
         try:
-            async with self.session.get(f"{self.api_base_url}/models", headers={"Authorization": f"Bearer {self.tokens['api_key']}"}) as response:
-                response.raise_for_status()
-                data = (await response.json()).get("data", [])
-                if data:
-                    model_list = "\n".join([f"- {model['id']}: {model['type']}" for model in data])
-                    await ctx.send(f"**Available Models:**\n{model_list}")
-                else:
-                    await ctx.send("No models found.")
-        except (aiohttp.ClientError, ValueError) as e:
+            headers = {
+                "Authorization": f"Bearer {self.tokens['api_key']}",
+                "Content-Type": "application/json"
+            }
+            response = requests.get(f"{self.API_BASE_URL}/models", headers=headers)
+            response.raise_for_status()
+            data = response.json().get("data", [])
+            if data:
+                model_list = "\n".join([f"- {model['id']}: {model['type']}" for model in data])
+                # Split the message if it's too long for Discord
+                while len(model_list) > 2000:
+                    part = model_list[:2000]
+                    await ctx.send(f"**Available Models (partial):**\n{part}")
+                    model_list = model_list[2000:]
+                await ctx.send(f"**Available Models:**\n{model_list}")
+            else:
+                await ctx.send("No models found.")
+        except requests.RequestException as e:
             await ctx.send(f"Failed to retrieve models: {e}")
 
     async def generate_image(self, ctx, prompt: str):
-        """gives image from ur prompt"""
+        """Generates an image based on the given prompt."""
         try:
             payload = {
                 "prompt": prompt,
@@ -61,9 +85,25 @@ class core(commands.Cog):
                 "response_format": "url",
                 "model": "flux-realism"  # Specify model here if needed
             }
-            async with self.session.post(f"{self.api_base_url}/images/generations", headers={"Authorization": f"Bearer {self.tokens['api_key']}"}, json=payload) as response:
-                response.raise_for_status()
-                image_url = (await response.json())["data"][0]["url"]
-                await ctx.send(f"Here is your generated image:\n{image_url}")
-        except (aiohttp.ClientError, ValueError) as e:
+            headers = {
+                "Authorization": f"Bearer {self.tokens['api_key']}",
+                "Content-Type": "application/json"
+            }
+            response = requests.post(f"{self.API_BASE_URL}/images/generations", headers=headers, json=payload)
+            response.raise_for_status()
+            image_url = response.json()["data"][0]["url"]
+            await ctx.send(f"Here is your generated image:\n{image_url}")
+        except requests.RequestException as e:
             await ctx.send(f"Failed to generate image: {e}")
+
+    @commands.command()
+    async def set_api(self, ctx: commands.Context, key: str, *, value: str):
+        """Sets API tokens for CablyAI."""
+        await self.bot.set_shared_api_tokens("CablyAI", key, value)
+        await ctx.send(f"API token `{key}` has been set.")
+
+    async def cog_unload(self) -> None:
+        pass
+
+# To set up the cog, remember to load it in your bot like this:
+# bot.add_cog(Core(bot))
