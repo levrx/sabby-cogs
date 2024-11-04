@@ -7,7 +7,7 @@ import discord
 class DiffusionError(discord.errors.DiscordException):
     pass
 
-class MyCog(commands.Cog):
+class core(commands.Cog):
     """cably ai cog"""
 
     def __init__(self, bot: Red):
