@@ -1,4 +1,5 @@
-import requests
+import aiohttp  # Make sure to import aiohttp
+import json
 from redbot.core import commands
 from redbot.core.bot import Red
 
@@ -37,46 +38,59 @@ class core(commands.Cog):
             await ctx.send("Invalid action. Use `list_models` or `generate_image`.")
 
     async def list_models(self, ctx):
-        """Lists available AI models."""
+        """Lists available AI models asynchronously."""
         try:
-            headers = {
-                "Authorization": f"Bearer {self.tokens['api_key']}",
-                "Content-Type": "application/json"
-            }
-            response = requests.get(f"{self.API_BASE_URL}/models", headers=headers)
-            response.raise_for_status()
-            data = response.json().get("data", [])
-            if data:
-                model_list = "\n".join([f"- {model['id']}: {model['type']}" for model in data])
+            async with aiohttp.ClientSession() as session:
+                headers = {
+                    "Authorization": f"Bearer {self.tokens['api_key']}",
+                    "Content-Type": "application/json"
+                }
+                async with session.get(f"{self.API_BASE_URL}/models", headers=headers) as response:
+                    if response.status == 200:
+                        models_data = await response.json()
+                        if isinstance(models_data.get("data"), list):
+                            model_list = "\n".join([f"- {model['id']}: {model['type']}" for model in models_data["data"]])
 
-                # Split the message if it's too long for Discord
-                for i in range(0, len(model_list), 2000):
-                    await ctx.send(f"**Available Models (partial):**\n{model_list[i:i + 2000]}")
-            else:
-                await ctx.send("No models found.")
-        except requests.RequestException as e:
-            await ctx.send(f"Failed to retrieve models: {e}")
+                            # Split the message if it's too long for Discord
+                            while len(model_list) > 2000:
+                                await ctx.send(f"**Available Models (partial):**\n{model_list[:2000]}")
+                                model_list = model_list[2000:]  # Remove the part that was sent
+                            
+                            await ctx.send(f"**Available Models (remaining):**\n{model_list}")  # Send the remaining part
+                        else:
+                            await ctx.send("Failed to load models. Expected a list.")
+                    else:
+                        await ctx.send(f"Failed to fetch models. Status code: {response.status}")
+        except aiohttp.ClientError as e:
+            await ctx.send(f"Network error occurred: {str(e)}")
+        except Exception as e:
+            await ctx.send(f"An unexpected error occurred: {str(e)}")
 
     async def generate_image(self, ctx, prompt: str):
-        """Generates an image based on the given prompt."""
+        """Generates an image based on the given prompt asynchronously."""
         try:
-            payload = {
-                "prompt": prompt,
-                "n": 1,
-                "size": "1024x1024",
-                "response_format": "url",
-                "model": "flux-realism"  # Specify model here if needed
-            }
-            headers = {
-                "Authorization": f"Bearer {self.tokens['api_key']}",
-                "Content-Type": "application/json"
-            }
-            response = requests.post(f"{self.API_BASE_URL}/images/generations", headers=headers, json=payload)
-            response.raise_for_status()
-            image_url = response.json()["data"][0]["url"]
-            await ctx.send(f"Here is your generated image:\n{image_url}")
-        except requests.RequestException as e:
-            await ctx.send(f"Failed to generate image: {e}")
+            async with aiohttp.ClientSession() as session:
+                payload = {
+                    "prompt": prompt,
+                    "n": 1,
+                    "size": "1024x1024",
+                    "response_format": "url",
+                    "model": "flux-realism"  # Specify model here if needed
+                }
+                headers = {
+                    "Authorization": f"Bearer {self.tokens['api_key']}",
+                    "Content-Type": "application/json"
+                }
+                async with session.post(f"{self.API_BASE_URL}/images/generations", headers=headers, json=payload) as response:
+                    if response.status == 200:
+                        image_url = (await response.json())["data"][0]["url"]
+                        await ctx.send(f"Here is your generated image:\n{image_url}")
+                    else:
+                        await ctx.send(f"Failed to generate image. Status code: {response.status}")
+        except aiohttp.ClientError as e:
+            await ctx.send(f"Network error occurred: {str(e)}")
+        except Exception as e:
+            await ctx.send(f"An unexpected error occurred: {str(e)}")
 
     @commands.command()
     async def set_api(self, ctx: commands.Context, key: str, *, value: str):
