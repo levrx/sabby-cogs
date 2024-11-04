@@ -1,4 +1,4 @@
-from .mycog import MyCog
+from .core import core
 
 async def setup(bot):
-    await bot.add_cog(MyCog(bot))
+    await bot.add_cog(core(bot))
