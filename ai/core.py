@@ -1,5 +1,7 @@
-import aiohttp  # Make sure to import aiohttp
+import aiohttp
 import json
+import asyncio
+from discord import Embed
 from redbot.core import commands
 from redbot.core.bot import Red
 
@@ -7,7 +9,7 @@ class CablyAIError(Exception):
     pass
 
 class core(commands.Cog):
-    """AI-powered cog for listing models and generating images"""
+    """cablyaiii"""
 
     API_BASE_URL = "https://cablyai.com/v1"
 
@@ -24,7 +26,7 @@ class core(commands.Cog):
 
     @commands.command()
     async def cably(self, ctx: commands.Context, action: str, *, args: str = ""):
-        """Handles the main commands for CablyAI.
+        """does the command for subcommands.
 
         Actions:
         - list_models: List available models for image generation.
@@ -33,12 +35,12 @@ class core(commands.Cog):
         if action.lower() == "list_models":
             await self.list_models(ctx)
         elif action.lower() == "generate_image":
-            await self.generate_image(ctx, args)
+            await self.generate_image_prompt(ctx, args)
         else:
             await ctx.send("Invalid action. Use `list_models` or `generate_image`.")
 
     async def list_models(self, ctx):
-        """Lists available AI model IDs for image generation asynchronously."""
+        """lists the models"""
         try:
             async with aiohttp.ClientSession() as session:
                 headers = {
@@ -49,17 +51,15 @@ class core(commands.Cog):
                     if response.status == 200:
                         models_data = await response.json()
                         if isinstance(models_data.get("data"), list):
-                            # Extracting only the IDs of models for image generations
-                            image_generation_model_ids = "\n".join(
-                                [model['id'] for model in models_data["data"] if 'image' in model['type']]
-                            )
+                            image_generation_model_ids = [
+                                model['id'] for model in models_data["data"] if 'image' in model['type']
+                            ]
 
-                            # Split the message if it's too long for Discord
-                            while len(image_generation_model_ids) > 2000:
-                                await ctx.send(f"**Available Image Generation Model IDs (partial):**\n{image_generation_model_ids[:2000]}")
-                                image_generation_model_ids = image_generation_model_ids[2000:]  # Remove the part that was sent
-
-                            await ctx.send(f"**Available Image Generation Model IDs (remaining):**\n{image_generation_model_ids}")  # Send the remaining part
+                            embed = Embed(title="Available Image Generation Model IDs", color=0x00FF00)
+                            for model_id in image_generation_model_ids:
+                                embed.add_field(name=model_id, value="\u200b", inline=False)  
+                            
+                            await ctx.send(embed=embed)
                         else:
                             await ctx.send("Failed to load models. Expected a list.")
                     else:
@@ -69,27 +69,52 @@ class core(commands.Cog):
         except Exception as e:
             await ctx.send(f"An unexpected error occurred: {str(e)}")
 
-    async def generate_image(self, ctx, prompt: str):
-        """Generates an image based on the given prompt asynchronously."""
+    async def generate_image_prompt(self, ctx, prompt: str):
+        """what model u want for image"""
         try:
             async with aiohttp.ClientSession() as session:
-                payload = {
-                    "prompt": prompt,
-                    "n": 1,
-                    "size": "1024x1024",
-                    "response_format": "url",
-                    "model": "flux-realism"  # Specify model here if needed
-                }
                 headers = {
                     "Authorization": f"Bearer {self.tokens['api_key']}",
                     "Content-Type": "application/json"
                 }
-                async with session.post(f"{self.API_BASE_URL}/images/generations", headers=headers, json=payload) as response:
+                async with session.get(f"{self.API_BASE_URL}/models", headers=headers) as response:
                     if response.status == 200:
-                        image_url = (await response.json())["data"][0]["url"]
-                        await ctx.send(f"Here is your generated image:\n{image_url}")
+                        models_data = await response.json()
+                        if isinstance(models_data.get("data"), list):
+                            image_generation_models = [
+                                model['id'] for model in models_data["data"] if 'image' in model['type']
+                            ]
+                            await ctx.send(f"Available models for image generation: {', '.join(image_generation_models)}\nPlease type the model ID you want to use.")
+                            
+                            def check(m):
+                                return m.author == ctx.author and m.channel == ctx.channel and m.content in image_generation_models
+
+                            try:
+                                model_message = await self.bot.wait_for('message', check=check, timeout=30.0)
+                                model_id = model_message.content
+
+                                payload = {
+                                    "prompt": prompt,
+                                    "n": 1,
+                                    "size": "1024x1024",
+                                    "response_format": "url",
+                                    "model": model_id  
+                                }
+                                
+                                async with session.post(f"{self.API_BASE_URL}/images/generations", headers=headers, json=payload) as response:
+                                    if response.status == 200:
+                                        image_url = (await response.json())["data"][0]["url"]
+                                        await ctx.send(f"Here is your generated image:\n{image_url}")
+                                    else:
+                                        await ctx.send(f"Failed to generate image. Status code: {response.status}")
+                            except asyncio.TimeoutError:
+                                await ctx.send("You took too long to respond! Please try again.")
+                            except Exception as e:
+                                await ctx.send(f"An unexpected error occurred: {str(e)}")
+                        else:
+                            await ctx.send("Failed to load models. Expected a list.")
                     else:
-                        await ctx.send(f"Failed to generate image. Status code: {response.status}")
+                        await ctx.send(f"Failed to fetch models. Status code: {response.status}")
         except aiohttp.ClientError as e:
             await ctx.send(f"Network error occurred: {str(e)}")
         except Exception as e:
