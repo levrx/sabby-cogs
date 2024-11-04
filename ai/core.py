@@ -1,18 +1,12 @@
-import io
 import requests
 from redbot.core import commands
 from redbot.core.bot import Red
-from redbot.core.utils.views import SetApiView
-import discord
 
-class CablyAIError(discord.errors.DiscordException):
+class CablyAIError(Exception):
     pass
 
 class core(commands.Cog):
     """AI-powered cog for listing models and generating images"""
-
-    __author__ = ["your_username"]  # Replace with your Discord username or ID
-    __version__ = "0.1.0"
 
     API_BASE_URL = "https://cablyai.com/v1"
 
@@ -23,16 +17,6 @@ class core(commands.Cog):
         self.tokens = await self.bot.get_shared_api_tokens("CablyAI")
         if not self.tokens.get("api_key"):
             raise CablyAIError("Setup not done. Use `set api CablyAI api_key <your api key>`.")
-
-    def format_help_for_context(self, ctx: commands.Context) -> str:
-        pre_processed = super().format_help_for_context(ctx) or ""
-        n = "\n" if "\n\n" not in pre_processed else ""
-        text = [
-            f"{pre_processed}{n}",
-            f"Cog Version: **{self.__version__}**",
-            f"Author: **{self.__author__}**",
-        ]
-        return "\n".join(text)
 
     async def cog_load(self) -> None:
         await self.initialize_tokens()
@@ -64,12 +48,10 @@ class core(commands.Cog):
             data = response.json().get("data", [])
             if data:
                 model_list = "\n".join([f"- {model['id']}: {model['type']}" for model in data])
+
                 # Split the message if it's too long for Discord
-                while len(model_list) > 2000:
-                    part = model_list[:2000]
-                    await ctx.send(f"**Available Models (partial):**\n{part}")
-                    model_list = model_list[2000:]
-                await ctx.send(f"**Available Models:**\n{model_list}")
+                for i in range(0, len(model_list), 2000):
+                    await ctx.send(f"**Available Models (partial):**\n{model_list[i:i + 2000]}")
             else:
                 await ctx.send("No models found.")
         except requests.RequestException as e:
@@ -104,6 +86,3 @@ class core(commands.Cog):
 
     async def cog_unload(self) -> None:
         pass
-
-# To set up the cog, remember to load it in your bot like this:
-# bot.add_cog(Core(bot))
