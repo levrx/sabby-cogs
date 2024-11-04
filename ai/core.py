@@ -17,7 +17,7 @@ class core(commands.Cog):
     async def initialize_tokens(self):
         self.tokens = await self.bot.get_shared_api_tokens("CablyAI")
         if not self.tokens.get("api_key"):
-            raise CablyAIError("Setup not done. Use `set api CablyAI api_key <your api key> `.")
+            raise CablyAIError("Setup not done. Use `set api CablyAI api_key <your api key>`.")
 
     async def cog_load(self) -> None:
         await self.initialize_tokens()
@@ -27,7 +27,7 @@ class core(commands.Cog):
         """Handles the main commands for CablyAI.
 
         Actions:
-        - list_models: List available models.
+        - list_models: List available models for image generation.
         - generate_image: Generate an image based on a prompt.
         """
         if action.lower() == "list_models":
@@ -38,7 +38,7 @@ class core(commands.Cog):
             await ctx.send("Invalid action. Use `list_models` or `generate_image`.")
 
     async def list_models(self, ctx):
-        """Lists available AI models asynchronously, showing only IDs."""
+        """Lists available AI model IDs for image generation asynchronously."""
         try:
             async with aiohttp.ClientSession() as session:
                 headers = {
@@ -49,15 +49,17 @@ class core(commands.Cog):
                     if response.status == 200:
                         models_data = await response.json()
                         if isinstance(models_data.get("data"), list):
-                            # Extracting only the IDs
-                            model_ids = "\n".join([model['id'] for model in models_data["data"]])
+                            # Extracting only the IDs of models for image generations
+                            image_generation_model_ids = "\n".join(
+                                [model['id'] for model in models_data["data"] if 'image' in model['type']]
+                            )
 
                             # Split the message if it's too long for Discord
-                            while len(model_ids) > 2000:
-                                await ctx.send(f"**Available Model IDs (partial):**\n{model_ids[:2000]}")
-                                model_ids = model_ids[2000:]  # Remove the part that was sent
+                            while len(image_generation_model_ids) > 2000:
+                                await ctx.send(f"**Available Image Generation Model IDs (partial):**\n{image_generation_model_ids[:2000]}")
+                                image_generation_model_ids = image_generation_model_ids[2000:]  # Remove the part that was sent
 
-                            await ctx.send(f"**Available Model IDs (remaining):**\n{model_ids}")  # Send the remaining part
+                            await ctx.send(f"**Available Image Generation Model IDs (remaining):**\n{image_generation_model_ids}")  # Send the remaining part
                         else:
                             await ctx.send("Failed to load models. Expected a list.")
                     else:
