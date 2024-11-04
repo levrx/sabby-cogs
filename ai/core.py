@@ -3,7 +3,8 @@ import json
 import asyncio
 from discord import Embed
 from discord.ext import commands
-from discord.ui import View, Button, ButtonStyle
+from discord.ui import View, Button  # Remove ButtonStyle here
+from discord import ButtonStyle  # Import ButtonStyle separately
 from redbot.core.bot import Red
 
 class CablyAIError(Exception):
