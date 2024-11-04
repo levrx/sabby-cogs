@@ -1,0 +1,15 @@
+{
+    "author": ["levrx"],
+    "install_msg": "",
+    "name": "CablyAI Image Generation",
+    "disabled": false,
+    "short": "Image Generation using the Cably AI API.",
+    "description": "Image Generation using the Cably AI API.",
+    "tags": [
+        "ai",
+        "cablyai"
+    ],
+    "required_cogs": {},
+    "requirements": [],
+    "type": "COG"
+}
