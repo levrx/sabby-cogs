@@ -1,5 +1,7 @@
-from redbot.core import commands
+import discord
+from discord.ext import commands
 from redbot.core.bot import Red
+import aiohttp
 
 class CablyAIError(Exception):
     pass
@@ -9,6 +11,7 @@ class core(commands.Cog):
         self.bot: Red = bot
         self.tokens = None
         self.CablyAIModel = None
+        self.session = aiohttp.ClientSession()  
 
     async def initialize_tokens(self):
         # fetch cably ai token
@@ -37,15 +40,15 @@ class core(commands.Cog):
             "model": self.CablyAIModel,
             "messages": [
                 {
-                    "role": "user",  
+                    "role": "user",
                     "content": input
                 }
             ],
-            "stream": False  
+            "stream": False
         }
 
-        async with self.bot.session.post(
-            "https://cablyai.com/v1/chat/completions",  
+        async with self.session.post(
+            "https://cablyai.com/v1/chat/completions",
             headers=headers,
             json=json_data
         ) as response:
@@ -55,3 +58,6 @@ class core(commands.Cog):
             data = await response.json()
             reply = data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
             await ctx.send(reply)
+
+    async def cog_unload(self):
+        await self.session.close()  
