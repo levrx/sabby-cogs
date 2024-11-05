@@ -4,7 +4,7 @@ from discord.ext import commands
 class CablyAIError(Exception):
     pass
 
-class CablyAICog(commands.Cog):
+class Core(commands.Cog):  # Changed from CablyAICog to Core
     def __init__(self, bot):
         self.bot = bot
         self.tokens = None
@@ -48,4 +48,3 @@ class CablyAICog(commands.Cog):
             data = await response.json()
             reply = data.get("output", "No response.")
             await ctx.send(reply)
-
