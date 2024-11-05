@@ -1,16 +1,17 @@
 import discord
-from discord.ext import commands
-import aiohttp  # Add the import
+from redbot.core import commands
+from redbot.core.bot import Red
+import aiohttp 
 
 class CablyAIError(Exception):
     pass
 
-class core(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
+class Core(commands.Cog):
+    def __init__(self, bot: Red):
+        self.bot: Red = bot
         self.tokens = None
         self.CablyAIModel = None
-        self.session = None
+        self.session = None  
 
     async def initialize_tokens(self):
         # fetch cably ai token
@@ -25,10 +26,12 @@ class core(commands.Cog):
     
     @commands.Cog.listener()
     async def on_ready(self):
+        """Initialize the session when the bot is ready."""
         self.session = aiohttp.ClientSession()
 
     @commands.command(name="cably")
     async def cably_command(self, ctx, *, input: str):
+        """Send input to the CablyAI chat model and return the response."""
         if not self.tokens:
             await self.initialize_tokens()
 
@@ -57,8 +60,3 @@ class core(commands.Cog):
             data = await response.json()
             reply = data.get("output", "No response.")
             await ctx.send(reply)
-
-    @commands.Cog.listener()
-    async def on_unload(self):
-        if self.session:
-            await self.session.close()
