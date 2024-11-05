@@ -4,7 +4,7 @@ from discord.ext import commands
 class CablyAIError(Exception):
     pass
 
-class core(commands.Cog):
+class CablyAICog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.tokens = None
