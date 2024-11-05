@@ -6,12 +6,13 @@ import aiohttp
 class CablyAIError(Exception):
     pass
 
-class core(commands.Cog):
+class Core(commands.Cog):
     def __init__(self, bot: Red):
         self.bot: Red = bot
         self.tokens = None
         self.CablyAIModel = None
-        self.session = aiohttp.ClientSession()  
+        self.session = aiohttp.ClientSession()
+        self.history = []  # Initialize history
 
     async def initialize_tokens(self):
         # fetch cably ai token
@@ -35,14 +36,12 @@ class core(commands.Cog):
             "Authorization": f"Bearer {self.tokens['api_key']}",
         }
 
+        # Append the new user input to the history
+        self.history.append({"role": "user", "content": input})
+
         json_data = {
             "model": self.CablyAIModel,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": input
-                }
-            ],
+            "messages": self.history,  # Include the history in the messages
             "stream": False
         }
 
@@ -57,7 +56,11 @@ class core(commands.Cog):
                     return
                 data = await response.json()
                 reply = data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
+
+                # Append the AI's reply to the history
+                self.history.append({"role": "assistant", "content": reply})
+
                 await ctx.send(reply)
 
     async def cog_unload(self):
-        await self.session.close()  
+        await self.session.close()
