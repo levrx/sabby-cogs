@@ -1,12 +1,12 @@
-import discord
-from discord.ext import commands
+from redbot.core import commands
+from redbot.core.bot import Red
 
 class CablyAIError(Exception):
     pass
 
-class Core(commands.Cog):  # Changed from CablyAICog to Core
-    def __init__(self, bot):
-        self.bot = bot
+class core(commands.Cog):
+    def __init__(self, bot: Red):
+        self.bot: Red = bot
         self.tokens = None
         self.CablyAIModel = None
 
@@ -19,7 +19,7 @@ class Core(commands.Cog):  # Changed from CablyAICog to Core
         # fetch model
         self.CablyAIModel = self.tokens.get("model")
         if not self.CablyAIModel:
-            raise CablyAIError("Model ID setup not done. Use `set api CablyAI model <your model id>`.")
+            raise CablyAIError("Model ID setup not done. Use `set api CablyAI model <the model>`.")
     
     @commands.command(name="cably")
     async def cably_command(self, ctx, *, input: str):

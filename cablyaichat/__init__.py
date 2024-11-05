@@ -1,4 +1,4 @@
-from .core import Core  # Changed from CablyAICog to Core
+from .core import core  # Changed from CablyAICog to Core
 
 async def setup(bot):
-    await bot.add_cog(Core(bot))  # Also updated here
+    await bot.add_cog(core(bot))  # Also updated here
