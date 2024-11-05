@@ -12,7 +12,7 @@ class core(commands.Cog):
         self.tokens = None
         self.CablyAIModel = None
         self.session = aiohttp.ClientSession()
-        self.history = []  # Initialize history
+        self.history = [] 
 
     async def initialize_tokens(self):
         # fetch cably ai token
@@ -36,12 +36,11 @@ class core(commands.Cog):
             "Authorization": f"Bearer {self.tokens['api_key']}",
         }
 
-        # Append the new user input to the history
         self.history.append({"role": "user", "content": input})
 
         json_data = {
             "model": self.CablyAIModel,
-            "messages": self.history,  # Include the history in the messages
+            "messages": self.history,
             "stream": False
         }
 
@@ -57,7 +56,6 @@ class core(commands.Cog):
                 data = await response.json()
                 reply = data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
 
-                # Append the AI's reply to the history
                 self.history.append({"role": "assistant", "content": reply})
 
                 await ctx.send(reply)
