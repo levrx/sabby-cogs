@@ -6,7 +6,7 @@ import aiohttp
 class CablyAIError(Exception):
     pass
 
-class Core(commands.Cog):
+class core(commands.Cog):
     def __init__(self, bot: Red):
         self.bot: Red = bot
         self.tokens = None
