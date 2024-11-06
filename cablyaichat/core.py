@@ -30,8 +30,6 @@ class core(commands.Cog):
             await self.initialize_tokens()
 
         headers = {
-            "accept": "application/json",
-            "Content-Type": "application/json",
             "Authorization": f"Bearer {self.tokens['api_key']}",
         }
 
@@ -41,9 +39,8 @@ class core(commands.Cog):
         if ctx.message.attachments:
             image = ctx.message.attachments[0]
             if image.content_type.startswith("image/"):
-                image_bytes = await image.read()
-                image_data = io.BytesIO(image_bytes)
-
+                image_data = await image.read()
+        
         json_data = {
             "model": self.CablyAIModel,
             "messages": self.history,
@@ -51,25 +48,38 @@ class core(commands.Cog):
         }
 
         if image_data:
-            import base64
-            image_base64 = base64.b64encode(image_data.getvalue()).decode("utf-8")
-            json_data["image"] = image_base64
+            form_data = aiohttp.FormData()
+            form_data.add_field('image', image_data, filename=image.filename, content_type=image.content_type)
+            form_data.add_field('json', json_data)
 
-        async with ctx.typing():
-            async with self.session.post(
-                "https://cablyai.com/v1/chat/completions",
-                headers=headers,
-                json=json_data
-            ) as response:
-                if response.status != 200:
-                    await ctx.send(f"Error communicating with CablyAI. Status code: {response.status}")
-                    return
-                data = await response.json()
-                reply = data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
+            async with ctx.typing():
+                async with self.session.post(
+                    "https://cablyai.com/v1/chat/completions",
+                    headers=headers,
+                    data=form_data
+                ) as response:
+                    if response.status != 200:
+                        await ctx.send(f"Error communicating with CablyAI. Status code: {response.status}")
+                        return
+                    data = await response.json()
+                    reply = data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
+                    self.history.append({"role": "assistant", "content": reply})
+                    await ctx.send(reply)
 
-                self.history.append({"role": "assistant", "content": reply})
-
-                await ctx.send(reply)
+        else:
+            async with ctx.typing():
+                async with self.session.post(
+                    "https://cablyai.com/v1/chat/completions",
+                    headers=headers,
+                    json=json_data
+                ) as response:
+                    if response.status != 200:
+                        await ctx.send(f"Error communicating with CablyAI. Status code: {response.status}")
+                        return
+                    data = await response.json()
+                    reply = data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
+                    self.history.append({"role": "assistant", "content": reply})
+                    await ctx.send(reply)
 
     async def cog_unload(self):
         await self.session.close()
