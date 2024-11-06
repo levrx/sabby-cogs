@@ -26,8 +26,8 @@ class core(commands.Cog):
             raise CablyAIError("Model ID setup not done. Use `set api CablyAI model <the model>`.")
 
     @commands.command(name="cably", aliases=["c"])
-    async def cably_command(self, ctx: commands.Context, *, args: str)  -> None:
-# (self, ctx, *, input: str):
+    async def cably_command(self, ctx: commands.Context, *, args: str) -> None:
+        # (self, ctx, *, input: str):
         if not self.tokens:
             await self.initialize_tokens()
 
@@ -37,7 +37,7 @@ class core(commands.Cog):
             "Authorization": f"Bearer {self.tokens['api_key']}",
         }
 
-        self.history.append({"role": "user", "content": input})
+        self.history.append({"role": "user", "content": args})
 
         json_data = {
             "model": self.CablyAIModel,
