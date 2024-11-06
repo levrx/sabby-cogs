@@ -2,8 +2,7 @@ import discord
 from redbot.core import commands
 from redbot.core.bot import Red
 import aiohttp
-import io
-import json
+import base64
 
 class CablyAIError(Exception):
     pass
@@ -32,40 +31,29 @@ class core(commands.Cog):
 
         headers = {
             "Authorization": f"Bearer {self.tokens['api_key']}",
-        }
-
-        self.history.append({"role": "user", "content": args if args else "Image message"})
-
-        json_data = {
-            "model": self.CablyAIModel,
-            "messages": self.history,
-            "stream": False
+            "Content-Type": "application/json",
+            "accept": "application/json"
         }
 
         if ctx.message.attachments:
             image = ctx.message.attachments[0]
             if image.content_type.startswith("image/"):
                 image_data = await image.read()
-
-                form_data = aiohttp.FormData()
-                form_data.add_field("image", image_data, filename=image.filename, content_type=image.content_type)
-                form_data.add_field("json", json.dumps(json_data), content_type="application/json")
-
-
-                async with ctx.typing():
-                    async with self.session.post(
-                        "https://cablyai.com/v1/chat/completions",
-                        headers=headers,
-                        data=form_data
-                    ) as response:
-                        if response.status != 200:
-                            await ctx.send(f"Error communicating with CablyAI. Status code: {response.status}")
-                            return
-                        data = await response.json()
-                        reply = data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
-                        self.history.append({"role": "assistant", "content": reply})
-                        await ctx.send(reply)
+                image_base64 = base64.b64encode(image_data).decode("utf-8")
+                
+                content = image_base64
+            else:
+                await ctx.send("Please upload a valid image.")
                 return
+        else:
+            content = args if args else "No input provided."
+
+        self.history.append({"role": "user", "content": content})
+        json_data = {
+            "model": self.CablyAIModel,
+            "messages": self.history,
+            "stream": False
+        }
 
         async with ctx.typing():
             async with self.session.post(
@@ -78,6 +66,7 @@ class core(commands.Cog):
                     return
                 data = await response.json()
                 reply = data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
+                
                 self.history.append({"role": "assistant", "content": reply})
                 await ctx.send(reply)
 
