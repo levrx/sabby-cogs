@@ -25,8 +25,9 @@ class core(commands.Cog):
         if not self.CablyAIModel:
             raise CablyAIError("Model ID setup not done. Use `set api CablyAI model <the model>`.")
 
-    @commands.command(name="cably")
-    async def cably_command(self, ctx, *, input: str):
+    @commands.command(name="cably", aliases=["c"])
+    async def cably_command(self, ctx: commands.Context, *, args: str)  -> None:
+# (self, ctx, *, input: str):
         if not self.tokens:
             await self.initialize_tokens()
 

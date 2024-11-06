@@ -1,13 +1,15 @@
 {
     "author": ["levrx"],
     "install_msg": "",
-    "name": "CablyAI Image Generation",
+    "name": "CablyAI Chatbot",
     "disabled": false,
-    "short": "Image Generation using the Cably AI API.",
-    "description": "Image Generation using the Cably AI API.",
+    "short": "Chatbot using the Cably AI API.",
+    "description": "Chatbot using the Cably AI API.",
     "tags": [
         "ai",
-        "cablyai"
+        "cablyai",
+        "chat",
+        "openai"
     ],
     "required_cogs": {},
     "requirements": [],
