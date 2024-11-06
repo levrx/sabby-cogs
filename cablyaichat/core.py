@@ -2,6 +2,7 @@ import discord
 from redbot.core import commands
 from redbot.core.bot import Red
 import aiohttp
+import io
 
 class CablyAIError(Exception):
     pass
@@ -15,19 +16,16 @@ class core(commands.Cog):
         self.history = [] 
 
     async def initialize_tokens(self):
-        # fetch cably ai token
         self.tokens = await self.bot.get_shared_api_tokens("CablyAI")
         if not self.tokens.get("api_key"):
             raise CablyAIError("API key setup not done. Use `set api CablyAI api_key <your api key>`.")
         
-        # fetch model
         self.CablyAIModel = self.tokens.get("model")
         if not self.CablyAIModel:
             raise CablyAIError("Model ID setup not done. Use `set api CablyAI model <the model>`.")
 
     @commands.command(name="cably", aliases=["c"])
-    async def cably_command(self, ctx: commands.Context, *, args: str) -> None:
-        # (self, ctx, *, input: str):
+    async def cably_command(self, ctx: commands.Context, *, args: str = None) -> None:
         if not self.tokens:
             await self.initialize_tokens()
 
@@ -37,7 +35,14 @@ class core(commands.Cog):
             "Authorization": f"Bearer {self.tokens['api_key']}",
         }
 
-        self.history.append({"role": "user", "content": args})
+        self.history.append({"role": "user", "content": args if args else "Image message"})
+
+        image_data = None
+        if ctx.message.attachments:
+            image = ctx.message.attachments[0]
+            if image.content_type.startswith("image/"):
+                image_bytes = await image.read()
+                image_data = io.BytesIO(image_bytes)
 
         json_data = {
             "model": self.CablyAIModel,
@@ -45,7 +50,12 @@ class core(commands.Cog):
             "stream": False
         }
 
-        async with ctx.typing():  
+        if image_data:
+            import base64
+            image_base64 = base64.b64encode(image_data.getvalue()).decode("utf-8")
+            json_data["image"] = image_base64
+
+        async with ctx.typing():
             async with self.session.post(
                 "https://cablyai.com/v1/chat/completions",
                 headers=headers,
