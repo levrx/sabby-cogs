@@ -35,14 +35,12 @@ class core(commands.Cog):
             "Authorization": f"Bearer {self.tokens['api_key']}",
         }
 
-        # Collect recent chat history and ensure it's JSON-serializable
         recent_history = await discord_handling.extract_history(ctx_or_message.channel, ctx_or_message.author)
         recent_history = [
             {"role": entry["role"], "content": str(entry["content"])}
             for entry in recent_history
         ]
 
-        # Prepare the message content for the API
         content = [{"type": "text", "text": question_text}]
         if image_url:
             content.append({"type": "image_url", "image_url": {"url": image_url}})
@@ -67,7 +65,6 @@ class core(commands.Cog):
 
                 self.history.append({"role": "assistant", "content": reply})
 
-                # Send the response using discord_handling
                 await discord_handling.send_response(ctx_or_message, reply, ctx_or_message.channel)
 
     @commands.command(name="cably", aliases=["c"])
