@@ -5,8 +5,10 @@ import aiohttp
 import re
 from .lib import discord_handling
 
+
 class CablyAIError(Exception):
     pass
+
 
 class core(commands.Cog):
     def __init__(self, bot: Red):
@@ -24,7 +26,7 @@ class core(commands.Cog):
         self.CablyAIModel = self.tokens.get("model")
         if not self.CablyAIModel:
             raise CablyAIError("Model ID setup not done. Use `set api CablyAI model <the model>`.")
-        
+    
     async def send_request(self, ctx_or_message, question_text, image_url=None):
         if not self.tokens:
             await self.initialize_tokens()
@@ -35,21 +37,9 @@ class core(commands.Cog):
             "Authorization": f"Bearer {self.tokens['api_key']}",
         }
 
-        # Extract history and ensure it returns the correct format
         recent_history = await discord_handling.extract_history(ctx_or_message.channel, ctx_or_message.author)
-
-        # Check if the returned history is a tuple and convert it to a list if possible
-        if isinstance(recent_history, tuple):
-            recent_history = list(recent_history)
-
-        # Ensure recent_history is a list of messages
-        if not isinstance(recent_history, list):
-            raise ValueError(f"Expected a list of messages, but got: {type(recent_history)}")
-
-        # Build history for API call
         recent_history = [
             {"role": entry["role"], "content": str(entry["content"])}
-            if isinstance(entry, dict) else {"role": "user", "content": str(entry)}
             for entry in recent_history
         ]
 
@@ -74,19 +64,18 @@ class core(commands.Cog):
                     return
                 data = await response.json()
                 reply = data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
-
+                
                 self.history.append({"role": "assistant", "content": reply})
 
-                # Ensure you're passing the message object
-                if isinstance(ctx_or_message, discord.Message):
-                    message = ctx_or_message  # Use the message object if it is a message
+                thread_name = "CablyAI Thread"  # Define thread name as needed
+                channel_or_thread = ctx_or_message.channel
+                
+                if isinstance(channel_or_thread, discord.TextChannel):
+                    await discord_handling.send_response(reply, ctx_or_message, channel_or_thread, thread_name)
                 else:
-                    # This should never happen, but let's make sure we extract the message
-                    message = ctx_or_message.message  # Extract the message from the context
-
-                thread_name = "CablyAI Thread"  # Define the thread name appropriately
-                await discord_handling.send_response(message, reply, ctx_or_message.channel, thread_name)
-
+                    # If the message is not in a TextChannel, we cannot create a thread
+                    await ctx_or_message.channel.send("Unable to create thread: Not in a TextChannel.")
+    
     @commands.command(name="cably", aliases=["c"])
     async def cably_command(self, ctx: commands.Context, *, args: str) -> None:
         image_url = None
@@ -102,7 +91,7 @@ class core(commands.Cog):
 
         mention_pattern = re.compile(rf"<@!?{self.bot.user.id}>")
         content = re.sub(mention_pattern, "", message.content).strip()
-        
+
         image_url = None
         if message.attachments:
             image_url = message.attachments[0].url  
