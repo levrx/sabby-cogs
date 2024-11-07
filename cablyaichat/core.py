@@ -37,10 +37,13 @@ class core(commands.Cog):
             "Authorization": f"Bearer {self.tokens['api_key']}",
         }
 
+        # Fetch recent message history and format it properly
         recent_history = await discord_handling.extract_history(ctx_or_message.channel, ctx_or_message.author)
+        
+        # Ensure the structure of the history is correct (list of dicts with 'role' and 'content')
         recent_history = [
-            {"role": entry["role"], "content": str(entry["content"])}
-            for entry in recent_history
+            {"role": "user" if message.author == ctx_or_message.author else "assistant", "content": message.content}
+            for message in recent_history
         ]
 
         content = [{"type": "text", "text": question_text}]
