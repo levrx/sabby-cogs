@@ -3,6 +3,7 @@ from redbot.core import commands
 from redbot.core.bot import Red
 import aiohttp
 import re
+import discord_handling # thanks sol :)
 
 class CablyAIError(Exception):
     pass
@@ -27,6 +28,11 @@ class core(commands.Cog):
     async def send_request(self, ctx_or_message, question_text, image_url=None):
         if not self.tokens:
             await self.initialize_tokens()
+
+        # Collect recent chat history to provide context
+        recent_history = await discord_handling.extract_history(ctx_or_message.channel)
+        self.history.extend(recent_history)  # adding msgs to history
+
 
         headers = {
             "accept": "application/json",
@@ -63,7 +69,8 @@ class core(commands.Cog):
 
                 self.history.append({"role": "assistant", "content": reply})
 
-                await ctx_or_message.channel.send(reply)
+                # Use send_response to send reply
+                await discord_handling.send_response(ctx_or_message, reply)
 
     @commands.command(name="cably", aliases=["c"])
     async def cably_command(self, ctx: commands.Context, *, args: str) -> None:
