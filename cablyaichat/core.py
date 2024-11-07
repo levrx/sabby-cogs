@@ -80,7 +80,9 @@ class core(commands.Cog):
 
                 self.history.append({"role": "assistant", "content": reply})
 
-                await discord_handling.send_response(ctx_or_message, reply, ctx_or_message.channel)
+                # Pass a thread_name argument (using an empty string if no thread is involved)
+                thread_name = ""  # Modify this as needed for your use case
+                await discord_handling.send_response(ctx_or_message, reply, ctx_or_message.channel, thread_name)
 
     @commands.command(name="cably", aliases=["c"])
     async def cably_command(self, ctx: commands.Context, *, args: str) -> None:
