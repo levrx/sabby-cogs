@@ -34,7 +34,6 @@ class core(commands.Cog):
             "Authorization": f"Bearer {self.tokens['api_key']}",
         }
 
-        # Construct the message content to match the curl command structure
         content = [{"type": "text", "text": question_text}]
         if image_url:
             content.append({"type": "image_url", "image_url": {"url": image_url}})
@@ -50,8 +49,6 @@ class core(commands.Cog):
             "max_tokens": 300
         }
 
-        print("JSON Data being sent:", json_data)  # Debugging: print the JSON payload
-
         async with ctx_or_message.channel.typing():
             async with self.session.post(
                 "https://cablyai.com/v1/chat/completions",
@@ -64,17 +61,15 @@ class core(commands.Cog):
                 data = await response.json()
                 reply = data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
 
-                # Add bot response to history
                 self.history.append({"role": "assistant", "content": reply})
 
                 await ctx_or_message.channel.send(reply)
 
     @commands.command(name="cably", aliases=["c"])
     async def cably_command(self, ctx: commands.Context, *, args: str) -> None:
-        # Check for image attachments in the command input
         image_url = None
         if ctx.message.attachments:
-            image_url = ctx.message.attachments[0].url  # Grab the first image URL
+            image_url = ctx.message.attachments[0].url  
 
         await self.send_request(ctx, args, image_url)
 
@@ -88,7 +83,7 @@ class core(commands.Cog):
         
         image_url = None
         if message.attachments:
-            image_url = message.attachments[0].url  # Grab the first image URL
+            image_url = message.attachments[0].url  
 
         await self.send_request(message, content, image_url)
 
