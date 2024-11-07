@@ -37,20 +37,15 @@ class core(commands.Cog):
             "Authorization": f"Bearer {self.tokens['api_key']}",
         }
 
-        # Fetch recent message history and format it properly
         recent_history = await discord_handling.extract_history(ctx_or_message.channel, ctx_or_message.author)
 
-        # Debugging: Log the type and content of recent_history to understand what it is returning
         print(f"recent_history type: {type(recent_history)}")
         print(f"recent_history content: {recent_history}")
 
-        # Check if recent_history is a tuple (as indicated by the error message)
         if isinstance(recent_history, tuple):
-            # Assuming that the tuple contains the message list as the first element
             recent_history = recent_history[0]
             print(f"Extracted recent_history from tuple: {recent_history}")
 
-        # Now ensure it's a list of discord.Message objects
         if isinstance(recent_history, list):
             if all(isinstance(item, discord.Message) for item in recent_history):
                 recent_history = [
