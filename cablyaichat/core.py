@@ -3,7 +3,7 @@ from redbot.core import commands
 from redbot.core.bot import Red
 import aiohttp
 import re
-import discord_handling # thanks sol :)
+from .lib import  discord_handling # thanks sol :)
 
 class CablyAIError(Exception):
     pass
