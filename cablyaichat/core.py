@@ -44,19 +44,22 @@ class core(commands.Cog):
         print(f"recent_history type: {type(recent_history)}")
         print(f"recent_history content: {recent_history}")
 
-        # Check if recent_history is a list, handle other cases if not
+        # Check if recent_history is a tuple (as indicated by the error message)
+        if isinstance(recent_history, tuple):
+            # Assuming that the tuple contains the message list as the first element
+            recent_history = recent_history[0]
+            print(f"Extracted recent_history from tuple: {recent_history}")
+
+        # Now ensure it's a list of discord.Message objects
         if isinstance(recent_history, list):
-            # Check if the list contains discord.Message objects
             if all(isinstance(item, discord.Message) for item in recent_history):
                 recent_history = [
                     {"role": "user" if message.author == ctx_or_message.author else "assistant", "content": message.content}
                     for message in recent_history
                 ]
             else:
-                # If the list does not contain discord.Message, raise an error
                 raise TypeError(f"Expected a list of discord.Message objects, but got {type(recent_history[0])} instead.")
         else:
-            # If it's not a list, raise a TypeError with the actual type
             raise TypeError(f"Expected a list, but got {type(recent_history)} for recent_history.")
 
         content = [{"type": "text", "text": question_text}]
@@ -89,7 +92,6 @@ class core(commands.Cog):
                 if isinstance(channel_or_thread, discord.TextChannel):
                     await discord_handling.send_response(reply, ctx_or_message, channel_or_thread, thread_name)
                 else:
-                    # If the message is not in a TextChannel, we cannot create a thread
                     await ctx_or_message.channel.send("Unable to create thread: Not in a TextChannel.")
     
     @commands.command(name="cably", aliases=["c"])
