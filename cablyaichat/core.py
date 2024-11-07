@@ -80,9 +80,14 @@ class core(commands.Cog):
 
                 self.history.append({"role": "assistant", "content": reply})
 
-                # Pass a thread_name argument (using an empty string if no thread is involved)
-                thread_name = ""  # Modify this as needed for your use case
-                await discord_handling.send_response(ctx_or_message, reply, ctx_or_message.channel, thread_name)
+                # Pass the correct message object, not just a string
+                if isinstance(ctx_or_message, discord.Message):
+                    message = ctx_or_message  # If it's a Message, use that
+                else:
+                    message = ctx_or_message.message  # Otherwise, retrieve it from ctx_or_message
+
+                thread_name = "CablyAI_Thread"  # Modify this as needed for your use case
+                await discord_handling.send_response(message, reply, ctx_or_message.channel, thread_name)
 
     @commands.command(name="cably", aliases=["c"])
     async def cably_command(self, ctx: commands.Context, *, args: str) -> None:
