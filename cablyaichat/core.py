@@ -24,7 +24,7 @@ class core(commands.Cog):
         if not self.CablyAIModel:
             raise CablyAIError("Model ID setup not done. Use `set api CablyAI model <the model>`.")
 
-    async def send_request(self, ctx_or_message, content_data):
+    async def send_request(self, ctx_or_message, question_text, image_url=None):
         if not self.tokens:
             await self.initialize_tokens()
 
@@ -34,21 +34,23 @@ class core(commands.Cog):
             "Authorization": f"Bearer {self.tokens['api_key']}",
         }
 
-        self.history.append({"role": "user", "content": content_data})
-
+        # Construct the message content to match the curl command structure
+        content = [{"type": "text", "text": question_text}]
+        if image_url:
+            content.append({"type": "image_url", "image_url": {"url": image_url}})
+        
         json_data = {
             "model": self.CablyAIModel,
             "messages": [
                 {
                     "role": "user",
-                    "content": content_data
+                    "content": content
                 }
             ],
-            "max_tokens": 300,
-            "stream": False
+            "max_tokens": 300
         }
 
-        print("JSON Data being sent:", json_data)  
+        print("JSON Data being sent:", json_data)  # Debugging: print the JSON payload
 
         async with ctx_or_message.channel.typing():
             async with self.session.post(
@@ -62,19 +64,19 @@ class core(commands.Cog):
                 data = await response.json()
                 reply = data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
 
+                # Add bot response to history
                 self.history.append({"role": "assistant", "content": reply})
 
                 await ctx_or_message.channel.send(reply)
 
     @commands.command(name="cably", aliases=["c"])
     async def cably_command(self, ctx: commands.Context, *, args: str) -> None:
-        content_data = [{"type": "text", "text": args}]
-        image_urls = [attachment.url for attachment in ctx.message.attachments if attachment.url.endswith(('.png', '.jpg', '.jpeg', '.gif'))]
-        
-        if image_urls:
-            content_data.append({"type": "image_url", "image_url": {"url": image_urls[0]}})
+        # Check for image attachments in the command input
+        image_url = None
+        if ctx.message.attachments:
+            image_url = ctx.message.attachments[0].url  # Grab the first image URL
 
-        await self.send_request(ctx, content_data)
+        await self.send_request(ctx, args, image_url)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -83,13 +85,12 @@ class core(commands.Cog):
 
         mention_pattern = re.compile(rf"<@!?{self.bot.user.id}>")
         content = re.sub(mention_pattern, "", message.content).strip()
-        content_data = [{"type": "text", "text": content}]
         
-        image_urls = [attachment.url for attachment in message.attachments if attachment.url.endswith(('.png', '.jpg', '.jpeg', '.gif'))]
-        if image_urls:
-            content_data.append({"type": "image_url", "image_url": {"url": image_urls[0]}})
+        image_url = None
+        if message.attachments:
+            image_url = message.attachments[0].url  # Grab the first image URL
 
-        await self.send_request(message, content_data)
+        await self.send_request(message, content, image_url)
 
     async def cog_unload(self):
         await self.session.close()
