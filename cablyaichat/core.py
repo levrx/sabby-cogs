@@ -90,7 +90,11 @@ class core(commands.Cog):
                     else:
                         await ctx_or_message.channel.send("Unable to create thread: Channel does not support creating threads.")
                 else:
-                    await ctx_or_message.channel.send("Unable to create thread: Not in a TextChannel.")
+                    # Check if ctx_or_message is a PyLavContext (if that's what you're working with)
+                    if isinstance(ctx_or_message, discord.ext.commands.Context):
+                        await ctx_or_message.send("Unable to create thread: This context does not support thread creation.")
+                    else:
+                        await ctx_or_message.channel.send("Unable to create thread: Not in a TextChannel.")
     
     @commands.command(name="cably", aliases=["c"])
     async def cably_command(self, ctx: commands.Context, *, args: str) -> None:
