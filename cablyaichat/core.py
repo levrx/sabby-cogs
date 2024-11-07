@@ -38,21 +38,18 @@ class core(commands.Cog):
         # Extract history and ensure it returns the correct format
         recent_history = await discord_handling.extract_history(ctx_or_message.channel, ctx_or_message.author)
 
-        # Debugging the output of extract_history
-        print(f"Extracted history: {recent_history}")
-        
         # Check if the returned history is a tuple and convert it to a list if possible
         if isinstance(recent_history, tuple):
-            print("Extracted history is a tuple. Converting to list.")
             recent_history = list(recent_history)
 
-        # Check if the returned history is a list
+        # Ensure recent_history is a list of messages
         if not isinstance(recent_history, list):
             raise ValueError(f"Expected a list of messages, but got: {type(recent_history)}")
 
-        # Ensure each entry in the recent_history list is a dictionary with the required keys
+        # Build history for API call
         recent_history = [
-            {"role": entry["role"], "content": str(entry["content"])} if isinstance(entry, dict) else {"role": "user", "content": str(entry)}
+            {"role": entry["role"], "content": str(entry["content"])}
+            if isinstance(entry, dict) else {"role": "user", "content": str(entry)}
             for entry in recent_history
         ]
 
@@ -80,13 +77,14 @@ class core(commands.Cog):
 
                 self.history.append({"role": "assistant", "content": reply})
 
-                # Pass the correct message object, not just a string
+                # Ensure you're passing the message object
                 if isinstance(ctx_or_message, discord.Message):
-                    message = ctx_or_message  # If it's a Message, use that
+                    message = ctx_or_message  # Use the message object if it is a message
                 else:
-                    message = ctx_or_message.message  # Otherwise, retrieve it from ctx_or_message
+                    # This should never happen, but let's make sure we extract the message
+                    message = ctx_or_message.message  # Extract the message from the context
 
-                thread_name = "CablyAI_Thread"  # Modify this as needed for your use case
+                thread_name = "CablyAI Thread"  # Define the thread name appropriately
                 await discord_handling.send_response(message, reply, ctx_or_message.channel, thread_name)
 
     @commands.command(name="cably", aliases=["c"])
