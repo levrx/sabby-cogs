@@ -3,7 +3,7 @@ from redbot.core import commands
 from redbot.core.bot import Red
 import aiohttp
 import re
-from .lib import discord_handling  # Adjusted import
+from .lib import discord_handling
 
 class CablyAIError(Exception):
     pass
@@ -29,27 +29,27 @@ class core(commands.Cog):
         if not self.tokens:
             await self.initialize_tokens()
 
-        # Collect recent chat history to provide context
-        author = ctx_or_message.author  # Set the author for history extraction
-        recent_history = await discord_handling.extract_history(ctx_or_message.channel, author)
-        self.history.extend(recent_history)  # Adding recent messages to self.history
-
-        # Prepare headers and content for the request
         headers = {
             "accept": "application/json",
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.tokens['api_key']}",
         }
 
-        # Combine recent history with the new question text
-        messages = self.history[-5:] + [{"role": "user", "content": question_text}]
+        # Collect recent chat history and ensure it's JSON-serializable
+        recent_history = await discord_handling.extract_history(ctx_or_message.channel, ctx_or_message.author)
+        recent_history = [
+            {"role": entry["role"], "content": str(entry["content"])}
+            for entry in recent_history
+        ]
+
+        # Prepare the message content for the API
         content = [{"type": "text", "text": question_text}]
         if image_url:
             content.append({"type": "image_url", "image_url": {"url": image_url}})
         
         json_data = {
             "model": self.CablyAIModel,
-            "messages": messages,
+            "messages": recent_history + [{"role": "user", "content": content}],
             "max_tokens": 300
         }
 
@@ -65,9 +65,10 @@ class core(commands.Cog):
                 data = await response.json()
                 reply = data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
 
-                # Add the reply to the history and send it in the chat
                 self.history.append({"role": "assistant", "content": reply})
-                await discord_handling.send_response(ctx_or_message, reply, ctx_or_message.channel, "cably")
+
+                # Send the response using discord_handling
+                await discord_handling.send_response(ctx_or_message, reply, ctx_or_message.channel)
 
     @commands.command(name="cably", aliases=["c"])
     async def cably_command(self, ctx: commands.Context, *, args: str) -> None:
@@ -79,7 +80,6 @@ class core(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        # Track every message where the bot is mentioned
         if message.author.bot or self.bot.user not in message.mentions:
             return
 
