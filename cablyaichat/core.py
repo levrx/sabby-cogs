@@ -41,6 +41,11 @@ class core(commands.Cog):
         # Debugging the output of extract_history
         print(f"Extracted history: {recent_history}")
         
+        # Check if the returned history is a tuple and convert it to a list if possible
+        if isinstance(recent_history, tuple):
+            print("Extracted history is a tuple. Converting to list.")
+            recent_history = list(recent_history)
+
         # Check if the returned history is a list
         if not isinstance(recent_history, list):
             raise ValueError(f"Expected a list of messages, but got: {type(recent_history)}")
