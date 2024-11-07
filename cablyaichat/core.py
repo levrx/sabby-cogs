@@ -24,7 +24,7 @@ class core(commands.Cog):
         self.CablyAIModel = self.tokens.get("model")
         if not self.CablyAIModel:
             raise CablyAIError("Model ID setup not done. Use `set api CablyAI model <the model>`.")
-    
+        
     async def send_request(self, ctx_or_message, question_text, image_url=None):
         if not self.tokens:
             await self.initialize_tokens()
@@ -37,9 +37,14 @@ class core(commands.Cog):
 
         # Extract history and ensure it returns the correct format
         recent_history = await discord_handling.extract_history(ctx_or_message.channel, ctx_or_message.author)
-        if not isinstance(recent_history, list):
-            raise ValueError("Expected a list of messages, but got something else.")
+
+        # Debugging the output of extract_history
+        print(f"Extracted history: {recent_history}")
         
+        # Check if the returned history is a list
+        if not isinstance(recent_history, list):
+            raise ValueError(f"Expected a list of messages, but got: {type(recent_history)}")
+
         # Ensure each entry in the recent_history list is a dictionary with the required keys
         recent_history = [
             {"role": entry["role"], "content": str(entry["content"])} if isinstance(entry, dict) else {"role": "user", "content": str(entry)}
