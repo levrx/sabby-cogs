@@ -40,15 +40,19 @@ class core(commands.Cog):
         # Fetch recent message history and format it properly
         recent_history = await discord_handling.extract_history(ctx_or_message.channel, ctx_or_message.author)
 
-        # Ensure recent_history is a list of discord.Message or properly structured objects
-        if isinstance(recent_history, list) and isinstance(recent_history[0], discord.Message):
-            recent_history = [
-                {"role": "user" if message.author == ctx_or_message.author else "assistant", "content": message.content}
-                for message in recent_history
-            ]
+        # Check if recent_history is a list of discord.Message objects or something else
+        if isinstance(recent_history, list):
+            # Check if the list contains discord.Message objects
+            if all(isinstance(item, discord.Message) for item in recent_history):
+                recent_history = [
+                    {"role": "user" if message.author == ctx_or_message.author else "assistant", "content": message.content}
+                    for message in recent_history
+                ]
+            else:
+                # If it's not a list of messages, we handle it accordingly
+                raise TypeError(f"Expected a list of discord.Message objects, but got {type(recent_history[0])} instead.")
         else:
-            # Handle cases where the history isn't in the expected format (not a list of discord.Messages)
-            raise TypeError("Expected a list of discord.Message objects, but got something else.")
+            raise TypeError("Expected a list, but got something else for recent_history.")
 
         content = [{"type": "text", "text": question_text}]
         if image_url:
