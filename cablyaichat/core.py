@@ -37,23 +37,30 @@ class core(commands.Cog):
             "Authorization": f"Bearer {self.tokens['api_key']}",
         }
 
+        # Fetch recent message history and format it properly
         recent_history = await discord_handling.extract_history(ctx_or_message.channel, ctx_or_message.author)
 
+        # Debugging: Log the type and content of recent_history to understand what it is returning
         print(f"recent_history type: {type(recent_history)}")
         print(f"recent_history content: {recent_history}")
 
+        # Check if recent_history is a tuple (as indicated by the error message)
         if isinstance(recent_history, tuple):
+            # Assuming that the tuple contains the message list as the first element
             recent_history = recent_history[0]
             print(f"Extracted recent_history from tuple: {recent_history}")
 
+        # Now ensure it's a list of dictionaries, not discord.Message objects
         if isinstance(recent_history, list):
-            if all(isinstance(item, discord.Message) for item in recent_history):
+            if all(isinstance(item, dict) for item in recent_history):
+                # If the history is a list of dicts, convert to the format we need
                 recent_history = [
-                    {"role": "user" if message.author == ctx_or_message.author else "assistant", "content": message.content}
+                    {"role": "user" if message.get("author") == ctx_or_message.author.name else "assistant", 
+                     "content": message.get("content")}
                     for message in recent_history
                 ]
             else:
-                raise TypeError(f"Expected a list of discord.Message objects, but got {type(recent_history[0])} instead.")
+                raise TypeError(f"Expected a list of dictionaries, but got {type(recent_history[0])} instead.")
         else:
             raise TypeError(f"Expected a list, but got {type(recent_history)} for recent_history.")
 
