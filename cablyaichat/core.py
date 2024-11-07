@@ -2,6 +2,7 @@ import discord
 from redbot.core import commands
 from redbot.core.bot import Red
 import aiohttp
+import re
 
 class CablyAIError(Exception):
     pass
@@ -36,11 +37,19 @@ class core(commands.Cog):
             "Authorization": f"Bearer {self.tokens['api_key']}",
         }
 
-        self.history.append({"role": "user", "content": args})
+        content_data = [{"type": "text", "text": args}]
+        
+        image_urls = [attachment.url for attachment in ctx.message.attachments if attachment.url.endswith(('.png', '.jpg', '.jpeg', '.gif'))]
+        if image_urls:
+            for url in image_urls:
+                content_data.append({"type": "image_url", "image_url": {"url": url}})
+
+        self.history.append({"role": "user", "content": content_data})
 
         json_data = {
             "model": self.CablyAIModel,
             "messages": self.history,
+            "max_tokens": 300,
             "stream": False
         }
 
@@ -65,9 +74,18 @@ class core(commands.Cog):
         if message.author.bot or self.bot.user not in message.mentions:
             return
 
-        content = message.content.replace(f"<@!{self.bot.user.id}>", "").strip()
-        if not content:
-            return  
+        mention_pattern = re.compile(rf"<@!?{self.bot.user.id}>")
+        content = re.sub(mention_pattern, "", message.content).strip()
+
+        content_data = [{"type": "text", "text": content}]
+        
+        image_urls = [attachment.url for attachment in message.attachments if attachment.url.endswith(('.png', '.jpg', '.jpeg', '.gif'))]
+        if image_urls:
+            for url in image_urls:
+                content_data.append({"type": "image_url", "image_url": {"url": url}})
+        
+        
+        self.history.append({"role": "user", "content": content_data})
 
         if not self.tokens:
             await self.initialize_tokens()
@@ -78,11 +96,10 @@ class core(commands.Cog):
             "Authorization": f"Bearer {self.tokens['api_key']}",
         }
 
-        self.history.append({"role": "user", "content": content})
-
         json_data = {
             "model": self.CablyAIModel,
             "messages": self.history,
+            "max_tokens": 300,
             "stream": False
         }
 
