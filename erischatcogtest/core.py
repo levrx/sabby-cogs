@@ -4,6 +4,7 @@ import discord
 from redbot.core import commands, data_manager, bot, Config, checks
 from redbot.core.bot import Red
 import aiohttp
+import os
 
 from .chatlib import discord_handling, model_querying
 
@@ -37,7 +38,12 @@ class Chat(BaseCog):
             "model": "gpt-4o",  # Default model
         }
         self.config.register_guild(**default_guild)
+
+        # Check if data directory exists, if not, create it
         self.data_dir = data_manager.bundled_data_path(self)
+        if not os.path.exists(self.data_dir):
+            os.makedirs(self.data_dir)
+
         self.whois_dictionary = None
         self.bot.add_listener(self.contextual_chat_handler, "on_message")
 
