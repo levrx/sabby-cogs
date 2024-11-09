@@ -3,12 +3,9 @@ from redbot.core import commands
 from redbot.core.bot import Red
 import aiohttp
 import re
-from .lib import discord_handling
-
 
 class CablyAIError(Exception):
     pass
-
 
 class core(commands.Cog):
     def __init__(self, bot: Red):
@@ -37,35 +34,23 @@ class core(commands.Cog):
             "Authorization": f"Bearer {self.tokens['api_key']}",
         }
 
-        # Fetch recent message history and format it properly
-        recent_history = await discord_handling.extract_history(ctx_or_message.channel, ctx_or_message.author)
-
-        if isinstance(recent_history, tuple):
-            recent_history = recent_history[0]  # Get the actual list if it's wrapped in a tuple
-            recent_history = recent_history[0]  
-
-        if isinstance(recent_history, list):
-            if all(isinstance(item, dict) for item in recent_history):
-                recent_history = [
-                    {"role": "user" if message.get("author") == ctx_or_message.author.name else "assistant", 
-                     "content": message.get("content")}
-                    for message in recent_history
-                ]
-            else:
-                raise TypeError(f"Expected a list of dictionaries, but got {type(recent_history[0])} instead.")
-        else:
-            raise TypeError(f"Expected a list, but got {type(recent_history)} for recent_history.")
-
+        # Construct the message content to match the curl command structure
         content = [{"type": "text", "text": question_text}]
         if image_url:
             content.append({"type": "image_url", "image_url": {"url": image_url}})
 
         json_data = {
             "model": self.CablyAIModel,
-            "messages": recent_history + [{"role": "user", "content": content}],
+            "messages": [
+                {
+                    "role": "user",
+                    "content": content
+                }
+            ],
             "max_tokens": 300
         }
 
+        print("JSON Data being sent:", json_data)  # Debugging: print the JSON payload
         async with ctx_or_message.channel.typing():
             async with self.session.post(
                 "https://cablyai.com/v1/chat/completions",
@@ -78,33 +63,35 @@ class core(commands.Cog):
                 data = await response.json()
                 reply = data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
 
+                # Add bot response to history
                 self.history.append({"role": "assistant", "content": reply})
 
-                thread_name = "CablyAI Thread"  # Define thread name as needed
-                thread_name = "CablyAI Thread"  
-                channel_or_thread = ctx_or_message.channel
-
-                # Check if we are working with a discord.TextChannel
-                if isinstance(channel_or_thread, discord.TextChannel):
-                    # Check if ctx_or_message has the create_thread method
-                    if hasattr(channel_or_thread, "create_thread"):
-                        await discord_handling.send_response(reply, ctx_or_message, channel_or_thread, thread_name)
-                    else:
-                        await ctx_or_message.channel.send("Unable to create thread: Channel does not support creating threads.")
-                else:
-                    # Check if ctx_or_message is a PyLavContext (if that's what you're working with)
-                    if isinstance(ctx_or_message, discord.ext.commands.Context):
-                        await ctx_or_message.send("Unable to create thread: This context does not support thread creation.")
-                    else:
-                        await ctx_or_message.channel.send("Unable to create thread: Not in a TextChannel.")
+                await ctx_or_message.channel.send(reply)
 
     @commands.command(name="cably", aliases=["c"])
     async def cably_command(self, ctx: commands.Context, *, args: str) -> None:
+        # Check for image attachments in the command input
         image_url = None
         if ctx.message.attachments:
+            image_url = ctx.message.attachments[0].url  # Grab the first image URL
             image_url = ctx.message.attachments[0].url  
 
         await self.send_request(ctx, args, image_url)
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if message.author.bot or self.bot.user not in message.mentions:
+            return
+
+        mention_pattern = re.compile(rf"<@!?{self.bot.user.id}>")
+        content = re.sub(mention_pattern, "", message.content).strip()
+
+        image_url = None
+        if message.attachments:
+            image_url = message.attachments[0].url  # Grab the first image URL
+            image_url = message.attachments[0].url  
+
+        await self.send_request(message, content, image_url)
 
     async def cog_unload(self):
         await self.session.close()
