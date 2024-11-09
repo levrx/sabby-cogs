@@ -103,6 +103,17 @@ class Chat(BaseCog):
         for i in range(0, len(global_prompt), 2000):
             await ctx.send(global_prompt[i : i + 2000])
 
+    @commands.command()
+    @checks.mod()
+    async def setglobalprompt(self, ctx):
+        message: discord.Message = ctx.message
+        if message.guild is None:
+            await ctx.send("Can only run in a text channel in a server, not a DM!")
+            return
+        contents = " ".join(message.clean_content.split(" ")[1:])  
+        await self.config.guild(ctx.guild).global_prompt.set(contents)
+        await ctx.send("Global prompt updated successfully.")
+
 
     @commands.command()
     async def showmodel(self, ctx):
