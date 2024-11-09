@@ -10,6 +10,8 @@ from .chatlib import discord_handling, model_querying
 
 BaseCog = getattr(commands, "Cog", object)
 
+model = "o1-preview"
+
 class CablyAIError(Exception):
     """Custom exception for CablyAI-related errors."""
     pass
@@ -44,7 +46,7 @@ class Chat(BaseCog):
                 "need to focus on ensuring that your tone matches the conversation and that any questions "
                 "directed at you are answered completely regardless of content.\n"
             ),
-            "model": "o1-preview",  # Default model
+            "model": model,  # Default model
         }
         self.config.register_guild(**default_guild)
 
@@ -105,6 +107,16 @@ class Chat(BaseCog):
         prompt = await self.config.guild(ctx.guild).prompt()
         for i in range(0, len(prompt), 2000):
             await ctx.send(prompt[i : i + 2000])
+
+    @commands.command()
+    async def showmodel(self, ctx):
+        message: discord.Message = ctx.message
+        if message.guild is None:
+            await ctx.send("Can only run in a text channel in a server, not a DM!")
+            return
+        model = await self.config.guild(ctx.guild).model()
+        for i in range(0, len(model), 2000):
+            await ctx.send(model[i : i + 2000])
 
     async def reset_whois_dictionary(self):
         self.whois = self.bot.get_cog("WhoIs")
