@@ -246,11 +246,6 @@ class Chat(BaseCog):
         prefix = await self.get_prefix(ctx)
 
         
-        if ctx.message.guild is None:
-            await ctx.send("Can only run in a text channel in a server, not a DM!")
-            return
-
-        
         await self.initialize_tokens()
         api_key = self.tokens.get("api_key")  
         model = self.CablyAIModel  
