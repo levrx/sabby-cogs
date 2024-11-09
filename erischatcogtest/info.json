@@ -1,0 +1,17 @@
+{
+    "author": ["levrx"],
+    "install_msg": "",
+    "name": "CablyAI Chatbot",
+    "disabled": false,
+    "short": "Chatbot using the Cably AI API.",
+    "description": "Chatbot using the Cably AI API.",
+    "tags": [
+        "ai",
+        "cablyai",
+        "chat",
+        "openai"
+    ],
+    "required_cogs": {},
+    "requirements": [],
+    "type": "COG"
+}
