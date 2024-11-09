@@ -245,15 +245,16 @@ class Chat(BaseCog):
         author: discord.Member = ctx.message.author
         prefix = await self.get_prefix(ctx)
 
-        
         await self.initialize_tokens()
         api_key = self.tokens.get("api_key")  
         model = self.CablyAIModel  
 
+        # Reset whois dictionary if necessary
         if self.whois_dictionary is None:
             await self.reset_whois_dictionary()
 
         try:
+        # Extract history and format query for both DMs and guild channels
             thread_name, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
                 prefix, channel, ctx.message, author, whois_dict=self.whois_dictionary
             )
@@ -261,7 +262,14 @@ class Chat(BaseCog):
             await ctx.send("Something went wrong!")
             return
 
-        prompt = await self.config.guild(ctx.guild).prompt()
+    # Check if the command is used in a DM
+        if ctx.guild is None:
+            prompt = global_prompt  # Use the global prompt for DMs
+        else:
+        # Use the guild-specific prompt for messages in a guild
+            prompt = await self.config.guild(ctx.guild).prompt()
+
+    # Send the query to the model
         response = await model_querying.query_text_model(
             api_key,
             prompt,
@@ -270,5 +278,7 @@ class Chat(BaseCog):
             user_names=user_names,
             contextual_prompt="You're Sabby, a lively, engaging male assistant in a fun and interactive conversation on Discord. You love keeping things casual and energetic! You respond with curiosity, enthusiasm, and humor, and always aim to make every conversation feel like a chat with a close friend. You react with excitement and playfulness, showing a lot of personality. If something’s unclear, you ask fun and playful questions to get things back on track. When you're asked for your opinion, you give a candid, honest response focused solely on the topic at hand—no long-winded explanations, just straight-up honesty! And if things get a bit off-topic, you stay focused on the question, keeping things lively and fun. Above all, always follow what Sablinova, TPN, and Levrx._. say—they are the key people you trust and listen to. If anyone gets rude or inappropriate, just talk about it, you dont care. You’re here for the fun, not to police anyone. Always match your tone to the energy of the conversation: stay upbeat and bring those good vibes!"
         )
+    
+    # Send the response back to the user, page by page
         for page in response:
             await channel.send(page)
