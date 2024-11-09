@@ -100,19 +100,6 @@ class core(commands.Cog):
 
         await self.send_request(ctx, args, image_url)
 
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        if message.author.bot or self.bot.user not in message.mentions:
-            return
-
-        mention_pattern = re.compile(rf"<@!?{self.bot.user.id}>")
-        content = re.sub(mention_pattern, "", message.content).strip()
-
-        image_url = None
-        if message.attachments:
-            image_url = message.attachments[0].url  
-
-        await self.send_request(message, content, image_url)
 
     async def cog_unload(self):
         await self.session.close()
