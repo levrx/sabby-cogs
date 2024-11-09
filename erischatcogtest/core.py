@@ -30,8 +30,8 @@ class Chat(BaseCog):
             "prompt": (
                 "Users interact with you on the Discord messaging platform through messages "
                 "prefixed by `.`. If users have any questions about how you work, please direct them to either use the "
-                "`.bug` command, file an issue at https://github.com/thedataleek/eris-cogs, or join "
-                "the development discord at https://discord.gg/ee3NyDq. "
+                "`.bug` command, file an issue at https://github.com/levrx/sabby-cogs, or join "
+                "the development discord."
                 "Since you are on a chat platform, maintain a conversational approach."
             ),
             "model": "gpt-4o",  # Default model
