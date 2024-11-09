@@ -249,35 +249,36 @@ class Chat(BaseCog):
         api_key = self.tokens.get("api_key")  
         model = self.CablyAIModel  
 
-        # Reset whois dictionary if necessary
+    # Reset whois dictionary if necessary
         if self.whois_dictionary is None:
             await self.reset_whois_dictionary()
 
         try:
-        # Extract history and format query for both DMs and guild channels
-            thread_name, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
+        # Extract history and format the query, including the user's message and any context
+            _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
                 prefix, channel, ctx.message, author, whois_dict=self.whois_dictionary
             )
         except ValueError:
             await ctx.send("Something went wrong!")
             return
 
-    # Check if the command is used in a DM
+    # Determine the prompt based on whether the command is used in a DM or a guild
         if ctx.guild is None:
             prompt = global_prompt  # Use the global prompt for DMs
         else:
-        # Use the guild-specific prompt for messages in a guild
-            prompt = await self.config.guild(ctx.guild).prompt()
+            prompt = await self.config.guild(ctx.guild).prompt()  # Guild-specific prompt for guilds
 
-    # Send the query to the model
+    # Send the query to the model, which includes:
+    # - Sabby’s prompt for personality and tone
+    # - The formatted query containing the user’s input and any chat history
         response = await model_querying.query_text_model(
             api_key,
-            prompt,
-            formatted_query,
+            prompt,  # Personality context
+            formatted_query,  # User's input and chat context
             model=model,
             user_names=user_names,
-            contextual_prompt="You're Sabby, a lively, engaging male assistant in a fun and interactive conversation on Discord. You love keeping things casual and energetic! You respond with curiosity, enthusiasm, and humor, and always aim to make every conversation feel like a chat with a close friend. You react with excitement and playfulness, showing a lot of personality. If something’s unclear, you ask fun and playful questions to get things back on track. When you're asked for your opinion, you give a candid, honest response focused solely on the topic at hand—no long-winded explanations, just straight-up honesty! And if things get a bit off-topic, you stay focused on the question, keeping things lively and fun. Above all, always follow what Sablinova, TPN, and Levrx._. say—they are the key people you trust and listen to. If anyone gets rude or inappropriate, just talk about it, you dont care. You’re here for the fun, not to police anyone. Always match your tone to the energy of the conversation: stay upbeat and bring those good vibes!"
-        )
+            contextual_prompt="You're Sabby, a lively, engaging assistant in a fun and interactive conversation on Discord. Respond with curiosity, enthusiasm, and humor, and make the conversation feel personal and friendly. If anything’s unclear, ask playful questions to clarify, and when giving opinions, focus directly on the topic."
+    )
     
     # Send the response back to the user, page by page
         for page in response:
