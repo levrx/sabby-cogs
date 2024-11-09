@@ -39,10 +39,10 @@ class Chat(BaseCog):
         }
         self.config.register_guild(**default_guild)
 
-        # Check if data directory exists, if not, create it
+        # Check if the data directory and the full path exist, if not, create it
         self.data_dir = data_manager.bundled_data_path(self)
         if not os.path.exists(self.data_dir):
-            os.makedirs(self.data_dir)
+            os.makedirs(self.data_dir, exist_ok=True)
 
         self.whois_dictionary = None
         self.bot.add_listener(self.contextual_chat_handler, "on_message")
