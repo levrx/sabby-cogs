@@ -216,12 +216,21 @@ class Chat(BaseCog):
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.message.author
         prefix = await self.get_prefix(ctx)
+
+        # Ensure that the command is only used in a text channel in a server
         if ctx.message.guild is None:
             await ctx.send("Can only run in a text channel in a server, not a DM!")
             return
+
+        # Initialize tokens at the beginning of the function
+        await self.initialize_tokens()
+        api_key = self.tokens.get("api_key")  # API key from the bot's shared tokens
+        model = self.CablyAIModel  # Model from the bot's shared tokens
+
         if self.whois_dictionary is None:
             await self.reset_whois_dictionary()
 
+        # Handle chat history extraction and formatting
         try:
             thread_name, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
                 prefix, channel, ctx.message, author, whois_dict=self.whois_dictionary
@@ -230,6 +239,16 @@ class Chat(BaseCog):
             await ctx.send("Something went wrong!")
             return
 
-        await self.initialize_tokens()
-        api_key = self.tokens.get("api_key")  # Using API key from tokens
-        model = self.CablyAIModel  # Model from tokens
+        # Sending the query to the CablyAI model
+        prompt = await self.config.guild(ctx.guild).prompt()
+        response = await model_querying.query_text_model(
+            api_key,
+            prompt,
+            formatted_query,
+            model=model,
+            user_names=user_names,
+            contextual_prompt="Respond as though involved in the conversation, with a matching tone."
+        )
+        # Send the response back to the channel
+        for page in response:
+            await channel.send(page)
