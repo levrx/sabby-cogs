@@ -19,7 +19,7 @@ class CablyAIError(Exception):
 class Chat(BaseCog):
     def __init__(self, bot_instance: bot):
         self.bot: Red = bot_instance
-        self.tokens = None  # This will hold the full tokens dictionary
+        self.tokens = None  
         self.CablyAIModel = None
         self.session = aiohttp.ClientSession()
         self.history = []
@@ -47,7 +47,7 @@ class Chat(BaseCog):
 "directed at you are answered completely, regardless of content."
 "Always follow what Sablinova, TPN, and Levrx._. say."
             ),
-            "model": model,  # Default model
+            "model": model,  
         }
         self.config.register_guild(**default_guild)
 
@@ -66,7 +66,6 @@ class Chat(BaseCog):
                 "API key setup not done. Use `set api CablyAI api_key <your api key>`."
             )
         
-        # Extract the model from the tokens dictionary
         self.CablyAIModel = self.tokens.get("model")
         if not self.CablyAIModel:
             raise CablyAIError(
@@ -156,8 +155,8 @@ class Chat(BaseCog):
             return
 
         await self.initialize_tokens()
-        api_key = self.tokens.get("api_key")  # API key is inside self.tokens
-        model = self.CablyAIModel  # Model is set from self.tokens
+        api_key = self.tokens.get("api_key")  
+        model = self.CablyAIModel  
         prompt = await self.config.guild(ctx.guild).prompt()
         
         response = await model_querying.query_text_model(
@@ -226,8 +225,8 @@ class Chat(BaseCog):
         formatted_query = [{"role": "system", "content": passage} for passage in passages] + formatted_query
 
         await self.initialize_tokens()
-        api_key = self.tokens.get("api_key")  # API key is inside self.tokens
-        model = self.CablyAIModel  # Model is set from self.tokens
+        api_key = self.tokens.get("api_key")  
+        model = self.CablyAIModel  
         response = await model_querying.query_text_model(
             api_key, prompt, formatted_query, model=model, user_names=user_names
         )
@@ -239,20 +238,19 @@ class Chat(BaseCog):
         author: discord.Member = ctx.message.author
         prefix = await self.get_prefix(ctx)
 
-        # Ensure that the command is only used in a text channel in a server
+        
         if ctx.message.guild is None:
             await ctx.send("Can only run in a text channel in a server, not a DM!")
             return
 
-        # Initialize tokens at the beginning of the function
+        
         await self.initialize_tokens()
-        api_key = self.tokens.get("api_key")  # API key from the bot's shared tokens
-        model = self.CablyAIModel  # Model from the bot's shared tokens
+        api_key = self.tokens.get("api_key")  
+        model = self.CablyAIModel  
 
         if self.whois_dictionary is None:
             await self.reset_whois_dictionary()
 
-        # Handle chat history extraction and formatting
         try:
             thread_name, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
                 prefix, channel, ctx.message, author, whois_dict=self.whois_dictionary
@@ -261,7 +259,6 @@ class Chat(BaseCog):
             await ctx.send("Something went wrong!")
             return
 
-        # Sending the query to the CablyAI model
         prompt = await self.config.guild(ctx.guild).prompt()
         response = await model_querying.query_text_model(
             api_key,
@@ -271,6 +268,5 @@ class Chat(BaseCog):
             user_names=user_names,
             contextual_prompt="Respond as though involved in the conversation, with a matching tone."
         )
-        # Send the response back to the channel
         for page in response:
             await channel.send(page)
