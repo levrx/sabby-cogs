@@ -39,8 +39,7 @@ class Chat(BaseCog):
         }
         self.config.register_guild(**default_guild)
 
-        # Check if the data directory and the full path exist, if not, create it
-        self.data_dir = data_manager.bundled_data_path(self)
+        self.data_dir = "/home/sol/.local/share/Red-DiscordBot/data/Sablinova/cogs/erischatcogtest"
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir, exist_ok=True)
 
