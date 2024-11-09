@@ -30,8 +30,8 @@ class Chat(BaseCog):
         default_guild = {
             "prompt": (
                 "Users interact with you on the Discord messaging platform through messages "
-                "prefixed by `.`. If users have any questions about how you work, please direct them to either use the "
-                "`.bug` command, file an issue at https://github.com/levrx/sabby-cogs, or join "
+                "prefixed by `-`. If users have any questions about how you work, please direct them to either use the "
+                "`-help` command, file an issue at https://github.com/levrx/sabby-cogs, or join "
                 "the development discord."
                 "Since you are on a chat platform, maintain a conversational approach."
             ),
