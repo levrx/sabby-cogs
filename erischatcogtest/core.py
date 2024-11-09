@@ -62,7 +62,7 @@ class Chat(BaseCog):
         await self.session.close()
 
     @commands.command()
-    @checks.mod()
+    @checks.is_owner()
     async def setprompt(self, ctx):
         message: discord.Message = ctx.message
         if message.guild is None:
@@ -73,7 +73,7 @@ class Chat(BaseCog):
         await ctx.send("Done")
 
     @commands.command()
-    @checks.mod()
+    @checks.is_owner()
     async def setmodel(self, ctx):
         message: discord.Message = ctx.message
         if message.guild is None:
@@ -104,7 +104,7 @@ class Chat(BaseCog):
             await ctx.send(global_prompt[i : i + 2000])
 
     @commands.command()
-    @checks.mod()
+    @checks.is_owner()
     async def setglobalprompt(self, ctx):
         message: discord.Message = ctx.message
         if message.guild is None:
