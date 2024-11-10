@@ -250,17 +250,18 @@ class Chat(BaseCog):
             await ctx.send("Can only run in a text channel in a server, not a DM!")
             return
 
-        # Defer the interaction to prevent "The application did not respond" error
-        await ctx.defer()
-
-        # Send typing indicator immediately to let users know the bot is processing
-        await ctx.typing()
-
         try:
             # Ensure args is not empty
             if not args:
                 await ctx.send("Please provide a message for Sabby to respond to!")
                 return
+
+            # Defer the interaction to prevent "The application did not respond" error
+            await ctx.defer()
+
+            # Send typing indicator immediately to let users know the bot is processing
+            # This is now only needed if you want to simulate "typing" but not when deferring.
+            # await ctx.typing()   # <-- Remove this if using defer
 
             formatted_query = [{"role": "user", "content": args}]
             await self.initialize_tokens()
