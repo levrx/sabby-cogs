@@ -217,27 +217,27 @@ class Chat(BaseCog):
                 prefix, channel, ctx.message, author
             )
         except ValueError:
-            await ctx.send("Something went wrong!")
+            await ctx.send("Something went wrong with the chat history extraction. Please try again.")
             return
-
-        tarot_guide = (self.data_dir / "tarot_guide.txt").read_text()
-        lines_to_include = [(406, 799), (1444, 2904), (2906, 3299)]
-        passages = ["\n".join(tarot_guide.splitlines()[start:end + 1]) for start, end in lines_to_include]
-
-        prompt = (
-            "You are Wrin Sivinxi.\n" + 
-            "An eccentric merchant in Otari who offers tarot readings. " +
-            "Focus on each user's specific tarot question, using the guide below for reference."
-        )
-        formatted_query = [{"role": "system", "content": passage} for passage in passages] + formatted_query
 
         await self.initialize_tokens()
         api_key = self.tokens.get("api_key")  
         model = self.CablyAIModel  
+        prompt = await self.config.guild(ctx.guild).prompt()
+        if not prompt:
+            await ctx.send("No prompt configured. Please set a prompt first.")
+            return
+
         response = await model_querying.query_text_model(
-            api_key, prompt, formatted_query, model=model, user_names=user_names
+            api_key,
+            prompt,
+            formatted_query,
+            model=model,
+            user_names=user_names,
+            contextual_prompt="Respond as a tarot reader giving a detailed reading with a mystical tone."
         )
-        await discord_handling.send_response(response, ctx.message, channel, "tarot reading")
+        for page in response:
+            await channel.send(page)
 
     @commands.hybrid_command()
     async def chat(self, ctx: commands.Context, *, args: str):
@@ -247,41 +247,27 @@ class Chat(BaseCog):
         prefix = await self.get_prefix(ctx)
 
         if ctx.guild is None:
-            await ctx.send("Can only run in a text channel in a server, not a DM!", ephemeral=True)
+            await ctx.send("Can only run in a text channel in a server, not a DM!")
             return
 
-        await ctx.defer(ephemeral=False)
-        
-        await self.initialize_tokens()
-        api_key = self.tokens.get("api_key")
-        model = self.CablyAIModel
-
-        if self.whois_dictionary is None:
-            await self.reset_whois_dictionary()
-
-        formatted_query = args
-        if not formatted_query.strip():
-            await ctx.send("Something went wrong! Error: Query not supplied!", ephemeral=True)
-            return
-
-        prompt = await self.config.guild(ctx.guild).prompt()
-        
         try:
+            formatted_query = [{"role": "user", "content": args}]
+            await self.initialize_tokens()
+            api_key = self.tokens.get("api_key")  
+            model = self.CablyAIModel  
+            prompt = await self.config.guild(ctx.guild).prompt()
+            
             response = await model_querying.query_text_model(
                 api_key,
                 prompt,
                 formatted_query,
                 model=model,
                 user_names=[author.display_name],
-                contextual_prompt="You're Sabby, a lively, engaging assistant in a fun and interactive conversation on Discord..."
+                contextual_prompt="Respond in a friendly, conversational style as Sabby."
             )
-
             for page in response:
-                await ctx.typing()
                 await channel.send(page)
 
-        except ValueError as e:
-            if hasattr(ctx, 'interaction') and ctx.interaction:  
-                await ctx.interaction.response.send_message(f"Something went wrong! Error: {e}", ephemeral=True)
-            else:  
-                await ctx.send(f"Something went wrong! Error: {e}", delete_after=10)
+        except Exception as e:
+            await ctx.send("There was an error processing your request.")
+            print(f"Error in chat command: {e}")
