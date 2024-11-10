@@ -240,47 +240,46 @@ class Chat(BaseCog):
         await discord_handling.send_response(response, ctx.message, channel, "tarot reading")
 
     @commands.hybrid_command()
-    async def chat(self, ctx: commands.Context):
+    async def chat(self, ctx: commands.Context, *, args: str):
+        """Engage in a conversation with Sabby by providing input text."""
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.author
         prefix = await self.get_prefix(ctx)
 
-    # Ensure command is in a guild channel
         if ctx.guild is None:
             await ctx.send("Can only run in a text channel in a server, not a DM!", ephemeral=True)
             return
 
-    # Initialize tokens
         await self.initialize_tokens()
-        api_key = self.tokens.get("api_key")  
-        model = self.CablyAIModel  
+        api_key = self.tokens.get("api_key")
+        model = self.CablyAIModel
 
         if self.whois_dictionary is None:
             await self.reset_whois_dictionary()
 
-        try:
-            thread_name, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-                prefix, channel, ctx.message, author, whois_dict=self.whois_dictionary
-            )
-        except ValueError as e:
-        # Send error message as an ephemeral response
-            if hasattr(ctx, 'interaction') and ctx.interaction:  # Slash command case
-                await ctx.interaction.response.send_message(f"Something went wrong! Error: {e}", ephemeral=True)
-            else:  # Prefix command case
-                await ctx.send(f"Something went wrong! Error: {e}", delete_after=10)
+        formatted_query = args
+        if not formatted_query.strip():
+            await ctx.send("Something went wrong! Error: Query not supplied!", ephemeral=True)
             return
 
-    # Main processing for successful command
         prompt = await self.config.guild(ctx.guild).prompt()
-        response = await model_querying.query_text_model(
-            api_key,
-            prompt,
-            formatted_query,
-            model=model,
-            user_names=user_names,
-            contextual_prompt="You're Sabby, a lively, engaging male assistant in a fun and interactive conversation on Discord..."
-        )
+        
+        try:
+            response = await model_querying.query_text_model(
+                api_key,
+                prompt,
+                formatted_query,
+                model=model,
+                user_names=[author.display_name],
+                contextual_prompt="You're Sabby, a lively, engaging assistant in a fun and interactive conversation on Discord..."
+            )
 
-        for page in response:
-            await ctx.typing()
-            await channel.send(page)
+            for page in response:
+                await ctx.typing()
+                await channel.send(page)
+
+        except ValueError as e:
+            if hasattr(ctx, 'interaction') and ctx.interaction:  
+                await ctx.interaction.response.send_message(f"Something went wrong! Error: {e}", ephemeral=True)
+            else:  
+                await ctx.send(f"Something went wrong! Error: {e}", delete_after=10)
