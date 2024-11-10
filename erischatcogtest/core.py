@@ -249,7 +249,7 @@ class Chat(BaseCog):
         if ctx.guild is None:
             await ctx.send("Can only run in a text channel in a server, not a DM!")
             return
-        
+
         await ctx.defer()
         await ctx.typing()
 
@@ -259,7 +259,7 @@ class Chat(BaseCog):
             api_key = self.tokens.get("api_key")  
             model = self.CablyAIModel  
             prompt = await self.config.guild(ctx.guild).prompt()
-            
+        
             response = await model_querying.query_text_model(
                 api_key,
                 prompt,
@@ -269,7 +269,7 @@ class Chat(BaseCog):
                 contextual_prompt="Respond in a friendly, conversational style as Sabby."
             )
             for page in response:
-                await channel.send(page)
+                await ctx.send(page)
 
         except Exception as e:
             await ctx.send("There was an error processing your request.")
