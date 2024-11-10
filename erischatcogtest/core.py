@@ -251,6 +251,7 @@ class Chat(BaseCog):
             return
         
         await ctx.defer()
+        await ctx.typing()
 
         try:
             formatted_query = [{"role": "user", "content": args}]
