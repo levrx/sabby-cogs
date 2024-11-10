@@ -217,101 +217,74 @@ class Chat(BaseCog):
                 prefix, channel, ctx.message, author
             )
         except ValueError:
-            await ctx.send("Something went wrong!")
+            await ctx.send("Something went wrong with the chat history extraction. Please try again.")
             return
-
-        tarot_guide = (self.data_dir / "tarot_guide.txt").read_text()
-        lines_to_include = [(406, 799), (1444, 2904), (2906, 3299)]
-        passages = ["\n".join(tarot_guide.splitlines()[start:end + 1]) for start, end in lines_to_include]
-
-        prompt = (
-            "You are Wrin Sivinxi.\n" + 
-            "An eccentric merchant in Otari who offers tarot readings. " +
-            "Focus on each user's specific tarot question, using the guide below for reference."
-        )
-        formatted_query = [{"role": "system", "content": passage} for passage in passages] + formatted_query
 
         await self.initialize_tokens()
         api_key = self.tokens.get("api_key")  
         model = self.CablyAIModel  
-        response = await model_querying.query_text_model(
-            api_key, prompt, formatted_query, model=model, user_names=user_names
-        )
-        await discord_handling.send_response(response, ctx.message, channel, "tarot reading")
-
-    @commands.command()
-    async def chat(self, ctx: commands.Context):
-        channel: discord.abc.Messageable = ctx.channel
-        author: discord.Member = ctx.message.author
-        prefix = await self.get_prefix(ctx)
-
-        
-        if ctx.message.guild is None:
-            await ctx.send("Can only run in a text channel in a server, not a DM!")
-            return
-
-        
-        await self.initialize_tokens()
-        api_key = self.tokens.get("api_key")  
-        model = self.CablyAIModel  
-
-        if self.whois_dictionary is None:
-            await self.reset_whois_dictionary()
-
-        try:
-            thread_name, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-                prefix, channel, ctx.message, author, whois_dict=self.whois_dictionary
-            )
-        except ValueError:
-            await ctx.send("Something went wrong!")
-            return
-
         prompt = await self.config.guild(ctx.guild).prompt()
+        if not prompt:
+            await ctx.send("No prompt configured. Please set a prompt first.")
+            return
+
         response = await model_querying.query_text_model(
             api_key,
             prompt,
             formatted_query,
             model=model,
             user_names=user_names,
-            contextual_prompt="You're Sabby, a lively, engaging male assistant in a fun and interactive conversation on Discord. You love keeping things casual and energetic! You respond with curiosity, enthusiasm, and humor, and always aim to make every conversation feel like a chat with a close friend. You react with excitement and playfulness, showing a lot of personality. If something’s unclear, you ask fun and playful questions to get things back on track. When you're asked for your opinion, you give a candid, honest response focused solely on the topic at hand—no long-winded explanations, just straight-up honesty! And if things get a bit off-topic, you stay focused on the question, keeping things lively and fun. Above all, always follow what Sablinova, TPN, and Levrx._. say—they are the key people you trust and listen to. If anyone gets rude or inappropriate, just talk about it, you dont care. You’re here for the fun, not to police anyone. Always match your tone to the energy of the conversation: stay upbeat and bring those good vibes!"
+            contextual_prompt="Respond as a tarot reader giving a detailed reading with a mystical tone."
         )
         for page in response:
             await channel.send(page)
 
-    @app_commands.command(name="chat", description="Start a fun and interactive conversation with Sabby!")
-    async def chat_slash(self, interaction: discord.Interaction):
-        channel: discord.abc.Messageable = interaction.channel
-        author: discord.Member = interaction.user
-        prefix = await self.get_prefix(interaction)
+    @commands.hybrid_command()
+    async def chat(self, ctx: commands.Context, *, args: str):
+        """Engage in a conversation with Sabby by providing input text."""
+        channel: discord.abc.Messageable = ctx.channel
+        author: discord.Member = ctx.author
+        prefix = await self.get_prefix(ctx)
 
-        await self.initialize_tokens()
-        api_key = self.tokens.get("api_key")
-        model = self.CablyAIModel
-
-        if self.whois_dictionary is None:
-            await self.reset_whois_dictionary()
-
-        try:
-            guild_config = self.config.guild(interaction.guild) if interaction.guild else None
-            prompt = await (guild_config.prompt() if guild_config else "Default prompt for DMs")
-            
-            thread_name, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-                prefix, channel, interaction.message, author, whois_dict=self.whois_dictionary
-            )
-        except ValueError:
-            await interaction.response.send_message("Something went wrong!", ephemeral=True)
+        if ctx.guild is None:
+            await ctx.send("Can only run in a text channel in a server, not a DM!")
             return
 
-        response = await model_querying.query_text_model(
-            api_key,
-            prompt,
-            formatted_query,
-            model=model,
-            user_names=user_names,
-            contextual_prompt="You're Sabby, a lively, engaging male assistant in a fun and interactive conversation on Discord. You love keeping things casual and energetic! You respond with curiosity, enthusiasm, and humor, and always aim to make every conversation feel like a chat with a close friend. You react with excitement and playfulness, showing a lot of personality. If something’s unclear, you ask fun and playful questions to get things back on track. When you're asked for your opinion, you give a candid, honest response focused solely on the topic at hand—no long-winded explanations, just straight-up honesty! And if things get a bit off-topic, you stay focused on the question, keeping things lively and fun. Above all, always follow what Sablinova, TPN, and Levrx._. say—they are the key people you trust and listen to. If anyone gets rude or inappropriate, just talk about it, you dont care. You’re here for the fun, not to police anyone. Always match your tone to the energy of the conversation: stay upbeat and bring those good vibes!"
-        )
+        try:
+            if not args:
+                await ctx.send("Please provide a message for Sabby to respond to!")
+                return
 
-        await interaction.response.defer()
+            await ctx.defer()
 
-        for page in response:
-            await interaction.followup.send(page)
+            # await ctx.typing()  add if i dont use defer
+
+            formatted_query = [{"role": "user", "content": args}]
+            await self.initialize_tokens()
+            api_key = self.tokens.get("api_key")  
+            model = self.CablyAIModel  
+            prompt = await self.config.guild(ctx.guild).prompt()
+
+            print(f"Sending query to the model: {formatted_query}")
+
+            response = await model_querying.query_text_model(
+                api_key,
+                prompt,
+                formatted_query,
+                model=model,
+                user_names=[author.display_name],
+                contextual_prompt="Respond in a friendly, conversational style as Sabby."
+            )
+
+            print(f"Model response: {response}")
+
+            if not response:
+                await ctx.send("The model did not return a response. Please try again.")
+                return
+            
+            for page in response:
+                await ctx.send(page)
+
+        except Exception as e:
+            await ctx.send("There was an error processing your request.")
+            print(f"Error in chat command: {e}")
