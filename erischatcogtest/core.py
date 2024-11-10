@@ -251,17 +251,13 @@ class Chat(BaseCog):
             return
 
         try:
-            # Ensure args is not empty
             if not args:
                 await ctx.send("Please provide a message for Sabby to respond to!")
                 return
 
-            # Defer the interaction to prevent "The application did not respond" error
             await ctx.defer()
 
-            # Send typing indicator immediately to let users know the bot is processing
-            # This is now only needed if you want to simulate "typing" but not when deferring.
-            # await ctx.typing()   # <-- Remove this if using defer
+            # await ctx.typing()  add if i dont use defer
 
             formatted_query = [{"role": "user", "content": args}]
             await self.initialize_tokens()
@@ -269,7 +265,6 @@ class Chat(BaseCog):
             model = self.CablyAIModel  
             prompt = await self.config.guild(ctx.guild).prompt()
 
-            # Log the request before sending to the API
             print(f"Sending query to the model: {formatted_query}")
 
             response = await model_querying.query_text_model(
@@ -281,19 +276,15 @@ class Chat(BaseCog):
                 contextual_prompt="Respond in a friendly, conversational style as Sabby."
             )
 
-            # Log the response from the model
             print(f"Model response: {response}")
 
-            # Check if the response is empty or not as expected
             if not response:
                 await ctx.send("The model did not return a response. Please try again.")
                 return
             
-            # Send each page of the response
             for page in response:
                 await ctx.send(page)
 
         except Exception as e:
-            # Log the error and send a friendly message to the user
             await ctx.send("There was an error processing your request.")
             print(f"Error in chat command: {e}")
