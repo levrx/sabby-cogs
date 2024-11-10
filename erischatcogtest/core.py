@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import discord
-from redbot.core import commands, data_manager, bot, Config, checks
+from redbot.core import commands, data_manager, bot, Config, checks, app_commands
 from redbot.core.bot import Red
 import aiohttp
 import os
@@ -277,3 +277,41 @@ class Chat(BaseCog):
         )
         for page in response:
             await channel.send(page)
+
+    @app_commands.command(name="chat", description="Start a fun and interactive conversation with Sabby!")
+    async def chat_slash(self, interaction: discord.Interaction):
+        channel: discord.abc.Messageable = interaction.channel
+        author: discord.Member = interaction.user
+        prefix = await self.get_prefix(interaction)
+
+        await self.initialize_tokens()
+        api_key = self.tokens.get("api_key")
+        model = self.CablyAIModel
+
+        if self.whois_dictionary is None:
+            await self.reset_whois_dictionary()
+
+        try:
+            guild_config = self.config.guild(interaction.guild) if interaction.guild else None
+            prompt = await (guild_config.prompt() if guild_config else "Default prompt for DMs")
+            
+            thread_name, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
+                prefix, channel, interaction.message, author, whois_dict=self.whois_dictionary
+            )
+        except ValueError:
+            await interaction.response.send_message("Something went wrong!", ephemeral=True)
+            return
+
+        response = await model_querying.query_text_model(
+            api_key,
+            prompt,
+            formatted_query,
+            model=model,
+            user_names=user_names,
+            contextual_prompt="You're Sabby, a lively, engaging male assistant in a fun and interactive conversation on Discord. You love keeping things casual and energetic! You respond with curiosity, enthusiasm, and humor, and always aim to make every conversation feel like a chat with a close friend. You react with excitement and playfulness, showing a lot of personality. If something’s unclear, you ask fun and playful questions to get things back on track. When you're asked for your opinion, you give a candid, honest response focused solely on the topic at hand—no long-winded explanations, just straight-up honesty! And if things get a bit off-topic, you stay focused on the question, keeping things lively and fun. Above all, always follow what Sablinova, TPN, and Levrx._. say—they are the key people you trust and listen to. If anyone gets rude or inappropriate, just talk about it, you dont care. You’re here for the fun, not to police anyone. Always match your tone to the energy of the conversation: stay upbeat and bring those good vibes!"
+        )
+
+        await interaction.response.defer()
+
+        for page in response:
+            await interaction.followup.send(page)
