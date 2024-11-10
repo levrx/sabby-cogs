@@ -250,6 +250,8 @@ class Chat(BaseCog):
             await ctx.send("Can only run in a text channel in a server, not a DM!", ephemeral=True)
             return
 
+        await ctx.defer(ephemeral=False)
+        
         await self.initialize_tokens()
         api_key = self.tokens.get("api_key")
         model = self.CablyAIModel
