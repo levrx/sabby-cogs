@@ -249,6 +249,8 @@ class Chat(BaseCog):
         if ctx.guild is None:
             await ctx.send("Can only run in a text channel in a server, not a DM!")
             return
+        
+        await ctx.defer()
 
         try:
             formatted_query = [{"role": "user", "content": args}]
