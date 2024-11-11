@@ -5,6 +5,7 @@ from redbot.core import commands, data_manager, bot, Config, checks, app_command
 from redbot.core.bot import Red
 import aiohttp
 import os
+import base64
 
 from .chatlib import discord_handling, model_querying
 
@@ -262,7 +263,7 @@ class Chat(BaseCog):
             attachment_bytes = await attachment.read()
 
             # Convert the image bytes to base64 encoding
-           base64_encoded = base64.b64encode(attachment_bytes).decode('utf-8')
+            base64_encoded = base64.b64encode(attachment_bytes).decode('utf-8')
 
             attachment_data = {
                 "role": "user", 
