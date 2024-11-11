@@ -242,8 +242,8 @@ class Chat(BaseCog):
             await channel.send(page)
 
     @commands.hybrid_command()
-    async def chat(self, ctx: commands.Context, *, args: str = None, attachments: str = None):
-        """Engage in a conversation with Sabby by providing input text and/or an attachment."""
+    async def chat(self, ctx: commands.Context, *, args: str, attachments: discord.Attachment = None):
+        """Engage in a conversation with Sabby by providing input text."""
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.author
         prefix = await self.get_prefix(ctx)
@@ -252,32 +252,23 @@ class Chat(BaseCog):
             await ctx.send("Can only run in a text channel in a server, not a DM!")
             return
 
-        # Ensure that either text or an attachment is provided
-        if not args and not ctx.message.attachments:
-            await ctx.send("Please provide a message or an attachment for Sabby to respond to!")
-            return
-
-        await ctx.defer()
-
-        # Prepare the formatted query with the text if provided
-        formatted_query = [{"role": "user", "content": args}] if args else []
-
-        # Check for attachments and add them to the query
-        for attachment in ctx.message.attachments:
-        # Here, we treat the attachment as an image, file, or other media type and prepare it as part of the query
-            attachment_bytes = await attachment.read()
-            attachment_data = {"role": "user", "content": attachment_bytes, "filename": attachment.filename}
-            formatted_query.append(attachment_data)
-
-        await self.initialize_tokens()
-        api_key = self.tokens.get("api_key")
-        model = self.CablyAIModel
-        prompt = await self.config.guild(ctx.guild).prompt()
-
-        print(f"Sending query to the model: {formatted_query}")
-
         try:
-        # Send the text (args) and attachments to the model for processing
+            if not args:
+                await ctx.send("Please provide a message for Sabby to respond to!")
+                return
+
+            await ctx.defer()
+
+            # await ctx.typing()  add if i dont use defer
+
+            formatted_query = [{"role": "user", "content": args}]
+            await self.initialize_tokens()
+            api_key = self.tokens.get("api_key")  
+            model = self.CablyAIModel  
+            prompt = await self.config.guild(ctx.guild).prompt()
+
+            print(f"Sending query to the model: {formatted_query}")
+
             response = await model_querying.query_text_model(
                 api_key,
                 prompt,
@@ -286,13 +277,12 @@ class Chat(BaseCog):
                 user_names=[author.display_name],
                 contextual_prompt=global_prompt
             )
-
             print(f"Model response: {response}")
 
             if not response:
                 await ctx.send("The model did not return a response. Please try again.")
                 return
-
+            
             for page in response:
                 await ctx.send(page)
 
