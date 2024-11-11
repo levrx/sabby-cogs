@@ -218,17 +218,14 @@ class Chat(BaseCog):
             _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
                 prefix, channel, ctx.message, author
             )
-        except ValueError:
-            await ctx.send("Something went wrong with the chat history extraction. Please try again.")
+        except ValueError as e:
+            print(e)
             return
 
         await self.initialize_tokens()
         api_key = self.tokens.get("api_key")  
         model = self.CablyAIModel  
-        prompt = await self.config.guild(ctx.guild).prompt()
-        if not prompt:
-            await ctx.send("No prompt configured. Please set a prompt first.")
-            return
+        prompt = "Act like a tarot reader and use the current conversation to interpret and give guidance on what you think is needed."
 
         response = await model_querying.query_text_model(
             api_key,
@@ -236,14 +233,14 @@ class Chat(BaseCog):
             formatted_query,
             model=model,
             user_names=user_names,
-            contextual_prompt="Respond as a tarot reader giving a detailed reading with a mystical tone."
+            contextual_prompt="Respond as though involved in the conversation, with a matching tone."
         )
         for page in response:
             await channel.send(page)
 
     @commands.hybrid_command()
-    async def chat(self, ctx: commands.Context, *, args: str):
-        """Engage in a conversation with Sabby by providing input text."""
+    async def chat(self, ctx: commands.Context, *, args: str = None):
+        """Engage in a conversation with Sabby by providing input text and optional attachments."""
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.author
         prefix = await self.get_prefix(ctx)
@@ -253,15 +250,21 @@ class Chat(BaseCog):
             return
 
         try:
-            if not args:
-                await ctx.send("Please provide a message for Sabby to respond to!")
+            if not args and not ctx.message.attachments:
+                await ctx.send("Please provide a message or an attachment for Sabby to respond to!")
                 return
 
             await ctx.defer()
 
-            # await ctx.typing()  add if i dont use defer
+            # Prepare the message content
+            formatted_query = [{"role": "user", "content": args or ""}]
 
-            formatted_query = [{"role": "user", "content": args}]
+            # Check if there is an attachment
+            if ctx.message.attachments:
+                attachment = ctx.message.attachments[0]
+                # Optional: Save or download attachment here for further processing if necessary
+                formatted_query.append({"role": "user", "content": f"Attached file: {attachment.url}"})
+
             await self.initialize_tokens()
             api_key = self.tokens.get("api_key")  
             model = self.CablyAIModel  
@@ -283,7 +286,7 @@ class Chat(BaseCog):
             if not response:
                 await ctx.send("The model did not return a response. Please try again.")
                 return
-            
+
             for page in response:
                 await ctx.send(page)
 
