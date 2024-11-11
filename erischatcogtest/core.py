@@ -281,6 +281,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             if args:
                 formatted_query.append({"role": "user", "content": args})
 
+        await self.initialize_tokens()
         api_key = self.tokens.get("api_key")  
 
         data = {
