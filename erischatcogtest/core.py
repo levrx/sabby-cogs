@@ -283,11 +283,16 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
         await self.initialize_tokens()
         api_key = self.tokens.get("api_key")  
+        model = self.CablyAIModel  
+
+        # Retrieve the global prompt from guild config
+        global_prompt = await self.config.guild(ctx.guild).global_prompt()
 
         data = {
-            "model": "gpt-4o",
+            "model": model,
             "messages": formatted_query,
-            "max_tokens": 300
+            "max_tokens": 300,
+            "contextual_prompt": global_prompt  # Add the global_prompt as contextual_prompt
         }
 
         headers = {

@@ -5,6 +5,9 @@ from redbot.core import commands, data_manager, bot, Config, checks, app_command
 from redbot.core.bot import Red
 import aiohttp
 import os
+import base64
+import requests
+import json
 
 from .chatlib import discord_handling, model_querying
 
@@ -17,7 +20,7 @@ class CablyAIError(Exception):
     """Custom exception for CablyAI-related errors."""
     pass
 
-class Chat(BaseCog):
+class Chat(commands.Cog):  # Inherit from commands.Cog
     def __init__(self, bot_instance: bot):
         self.bot: Red = bot_instance
         self.tokens = None  
@@ -113,7 +116,6 @@ class Chat(BaseCog):
         contents = " ".join(message.clean_content.split(" ")[1:])  
         await self.config.guild(ctx.guild).global_prompt.set(contents)
         await ctx.send("Global prompt updated successfully.")
-
 
     @commands.command()
     async def showmodel(self, ctx):
@@ -214,34 +216,31 @@ class Chat(BaseCog):
         prefix = await self.get_prefix(ctx)
         try:
             _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-                prefix, channel, ctx.message, author
+                prefix, channel, ctx.message, author, extract_full_history=True, whois_dict=self.whois_dictionary
             )
-        except ValueError:
-            await ctx.send("Something went wrong with the chat history extraction. Please try again.")
+        except ValueError as e:
+            print(e)
             return
 
         await self.initialize_tokens()
-        api_key = self.tokens.get("api_key")  
-        model = self.CablyAIModel  
-        prompt = await self.config.guild(ctx.guild).prompt()
-        if not prompt:
-            await ctx.send("No prompt configured. Please set a prompt first.")
-            return
+        api_key = self.tokens.get("api_key") 
+        model = self.CablyAIModel 
 
+        prompt = await self.config.guild(ctx.guild).global_prompt()
         response = await model_querying.query_text_model(
             api_key,
             prompt,
             formatted_query,
             model=model,
             user_names=user_names,
-            contextual_prompt="Respond as a tarot reader giving a detailed reading with a mystical tone."
+            contextual_prompt="Respond as though involved in the conversation, with a matching tone."
         )
         for page in response:
             await channel.send(page)
 
     @commands.hybrid_command()
-    async def chat(self, ctx: commands.Context, *, args: str):
-        """Engage in a conversation with Sabby by providing input text."""
+    async def chat(self, ctx: commands.Context, *, args: str = None, attachments: discord.Attachment = None):
+        """Engage in a conversation with Sabby by providing input text and/or attachments."""
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.author
         prefix = await self.get_prefix(ctx)
@@ -250,41 +249,71 @@ class Chat(BaseCog):
             await ctx.send("Can only run in a text channel in a server, not a DM!")
             return
 
+        if not args and not ctx.message.attachments:
+            await ctx.send("Please provide a message or an attachment for Sabby to respond to!")
+            return
+
+        await ctx.defer()
+
+        formatted_query = []
+
+        if args:
+            formatted_query.append({
+                "role": "user",
+                "content": [{"type": "text", "text": args}]
+            })
+
+        image_url = None
+        for attachment in ctx.message.attachments:
+            if attachment.url:
+                image_url = attachment.url
+                break
+
+        if image_url:
+            formatted_query.append({
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": args or "What’s in this image?"},
+                    {"type": "image_url", "image_url": {"url": image_url}}
+                ]
+            })
+        else:
+            if args:
+                formatted_query.append({"role": "user", "content": args})
+
+        await self.initialize_tokens()
+        api_key = self.tokens.get("api_key")  
+
+        data = {
+            "model": "gpt-4o",
+            "messages": formatted_query,
+            "max_tokens": 300
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+
         try:
-            if not args:
-                await ctx.send("Please provide a message for Sabby to respond to!")
-                return
-
-            await ctx.defer()
-
-            # await ctx.typing()  add if i dont use defer
-
-            formatted_query = [{"role": "user", "content": args}]
-            await self.initialize_tokens()
-            api_key = self.tokens.get("api_key")  
-            model = self.CablyAIModel  
-            prompt = await self.config.guild(ctx.guild).prompt()
-
-            print(f"Sending query to the model: {formatted_query}")
-
-            response = await model_querying.query_text_model(
-                api_key,
-                prompt,
-                formatted_query,
-                model=model,
-                user_names=[author.display_name],
-                contextual_prompt="Respond in a friendly, conversational style as Sabby."
+            response = requests.post(
+                'https://cablyai.com/v1/chat/completions',
+                headers=headers,
+                data=json.dumps(data)
             )
 
-            print(f"Model response: {response}")
-
-            if not response:
-                await ctx.send("The model did not return a response. Please try again.")
-                return
-            
-            for page in response:
-                await ctx.send(page)
+            if response.status_code == 200:
+                response_data = response.json()
+                model_response = response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
+                await ctx.send(model_response)
+            else:
+                await ctx.send("Error: Could not get a valid response from the AI.")
+                print(f"Error response: {response.status_code} - {response.text}")
 
         except Exception as e:
+            try:
+                await author.send(f"There was an error processing your request: {e}")
+            except Exception as dm_error:
+                print(f"Failed to send DM to author: {dm_error}")
             await ctx.send("There was an error processing your request.")
             print(f"Error in chat command: {e}")
