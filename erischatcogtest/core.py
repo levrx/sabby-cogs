@@ -240,8 +240,8 @@ class Chat(BaseCog):
             await channel.send(page)
 
     @commands.hybrid_command()
-    async def chat(self, ctx: commands.Context, *, args: str):
-        """Engage in a conversation with Sabby by providing input text."""
+    async def chat(self, ctx: commands.Context, *, args: str = None):
+        """Engage in a conversation with Sabby by providing input text and/or attachments."""
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.author
         prefix = await self.get_prefix(ctx)
@@ -250,19 +250,28 @@ class Chat(BaseCog):
             await ctx.send("Can only run in a text channel in a server, not a DM!")
             return
 
+    # Handle case when no text or attachments are provided
+        if not args and not ctx.message.attachments:
+            await ctx.send("Please provide a message or an attachment for Sabby to respond to!")
+            return
+
+        await ctx.defer()
+
+    # Format the user's input text
+        formatted_query = [{"role": "user", "content": args}] if args else []
+
+    # Process any attachments (images or files)
+        for attachment in ctx.message.attachments:
+        # Read the attachment's data (e.g., image, file)
+            attachment_bytes = await attachment.read()
+            attachment_data = {"role": "user", "content": attachment_bytes, "filename": attachment.filename}
+            formatted_query.append(attachment_data)
+
+    # Prepare for model querying
         try:
-            if not args:
-                await ctx.send("Please provide a message for Sabby to respond to!")
-                return
-
-            await ctx.defer()
-
-            # await ctx.typing()  add if i dont use defer
-
-            formatted_query = [{"role": "user", "content": args}]
             await self.initialize_tokens()
-            api_key = self.tokens.get("api_key")  
-            model = self.CablyAIModel  
+            api_key = self.tokens.get("api_key")
+            model = self.CablyAIModel
             prompt = await self.config.guild(ctx.guild).prompt()
 
             print(f"Sending query to the model: {formatted_query}")
@@ -281,7 +290,8 @@ class Chat(BaseCog):
             if not response:
                 await ctx.send("The model did not return a response. Please try again.")
                 return
-            
+        
+        # Send response from the model to the channel
             for page in response:
                 await ctx.send(page)
 
