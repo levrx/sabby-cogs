@@ -106,18 +106,6 @@ class Chat(BaseCog):
             await ctx.send(global_prompt[i : i + 2000])
 
     @commands.command()
-    @checks.is_owner()
-    async def setglobalprompt(self, ctx):
-        message: discord.Message = ctx.message
-        if message.guild is None:
-            await ctx.send("Can only run in a text channel in a server, not a DM!")
-            return
-        contents = " ".join(message.clean_content.split(" ")[1:])  
-        await self.config.guild(ctx.guild).global_prompt.set(contents)
-        await ctx.send("Global prompt updated successfully.")
-
-
-    @commands.command()
     async def showmodel(self, ctx):
         message: discord.Message = ctx.message
         if message.guild is None:
@@ -183,64 +171,9 @@ class Chat(BaseCog):
         prefix = await self.bot.get_prefix(ctx.message)
         return prefix[0] if isinstance(prefix, list) else prefix
 
-    @commands.command()
-    async def rewind(self, ctx: commands.Context):
-        prefix = await self.get_prefix(ctx)
-        channel: discord.abc.Messageable = ctx.channel
-        if ctx.message.guild is None:
-            await ctx.send("Chat command can only be used in an active thread! Please ask a question first.")
-            return
-
-        found_bot_response = False
-        async for thread_message in channel.history(limit=100, oldest_first=False):
-            try:
-                if thread_message.author.bot:
-                    await thread_message.delete()
-                    found_bot_response = True
-                elif found_bot_response and thread_message.clean_content.startswith(f"{prefix}chat"):
-                    await thread_message.delete()
-                    break
-            except Exception:
-                break
-
-        await ctx.message.delete()
-
-    @commands.command()
-    async def tarot(self, ctx: commands.Context):
-        channel: discord.abc.Messageable = ctx.channel
-        author: discord.Member = ctx.message.author
-        if ctx.message.guild is None:
-            await ctx.send("Can only run in a text channel in a server, not a DM!")
-            return
-
-        prefix = await self.get_prefix(ctx)
-        try:
-            _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-                prefix, channel, ctx.message, author
-            )
-        except ValueError as e:
-            print(e)
-            return
-
-        await self.initialize_tokens()
-        api_key = self.tokens.get("api_key")  
-        model = self.CablyAIModel  
-        prompt = "Act like a tarot reader and use the current conversation to interpret and give guidance on what you think is needed."
-
-        response = await model_querying.query_text_model(
-            api_key,
-            prompt,
-            formatted_query,
-            model=model,
-            user_names=user_names,
-            contextual_prompt="Respond as though involved in the conversation, with a matching tone."
-        )
-        for page in response:
-            await channel.send(page)
-
     @commands.hybrid_command()
-    async def chat(self, ctx: commands.Context, *, args: str = None):
-        """Engage in a conversation with Sabby by providing input text and optional attachments."""
+    async def chat(self, ctx: commands.Context, *, args: str = None, attachments: discord.Attachment = None):
+        """Engage in a conversation with Sabby by providing input text and/or an attachment."""
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.author
         prefix = await self.get_prefix(ctx)
@@ -250,7 +183,8 @@ class Chat(BaseCog):
             return
 
         try:
-            if not args and not ctx.message.attachments:
+            # Ensure that either `args` or `attachments` is provided
+            if not args and not attachments:
                 await ctx.send("Please provide a message or an attachment for Sabby to respond to!")
                 return
 
@@ -259,11 +193,11 @@ class Chat(BaseCog):
             # Prepare the message content
             formatted_query = [{"role": "user", "content": args or ""}]
 
-            # Check if there is an attachment
-            if ctx.message.attachments:
-                attachment = ctx.message.attachments[0]
-                # Optional: Save or download attachment here for further processing if necessary
-                formatted_query.append({"role": "user", "content": f"Attached file: {attachment.url}"})
+            # Process the attachment if provided
+            if attachments:
+                file_path = os.path.join(self.data_dir, attachments.filename)
+                await attachments.save(file_path)
+                formatted_query.append({"role": "user", "content": f"Attached file: {file_path}"})
 
             await self.initialize_tokens()
             api_key = self.tokens.get("api_key")  
