@@ -324,7 +324,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
 
     @commands.command()
-    async def expandimage(self, ctx: commands.Context):
+    async def upscale(self, ctx: commands.Context):
 
         channel: discord.abc.Messageable = ctx.channel
         message: discord.Message = ctx.message
