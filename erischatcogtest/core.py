@@ -260,7 +260,15 @@ class Chat(BaseCog):
 
         for attachment in ctx.message.attachments:
             attachment_bytes = await attachment.read()
-            attachment_data = {"role": "user", "content": attachment_bytes, "filename": attachment.filename}
+
+            # Convert the image bytes to base64 encoding
+           base64_encoded = base64.b64encode(attachment_bytes).decode('utf-8')
+
+            attachment_data = {
+                "role": "user", 
+                "content": base64_encoded,  # Store the base64-encoded string
+                "filename": attachment.filename
+            }
             formatted_query.append(attachment_data)
 
         try:
@@ -290,7 +298,7 @@ class Chat(BaseCog):
                 await ctx.send(page)
 
         except Exception as e:
-        # Send the exception details in a private message to the author
+            # Send the exception details in a private message to the author
             try:
                 await author.send(f"There was an error processing your request: {e}")
             except Exception as dm_error:
