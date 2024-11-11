@@ -250,7 +250,6 @@ class Chat(BaseCog):
             await ctx.send("Can only run in a text channel in a server, not a DM!")
             return
 
-
         if not args and not ctx.message.attachments:
             await ctx.send("Please provide a message or an attachment for Sabby to respond to!")
             return
@@ -286,10 +285,16 @@ class Chat(BaseCog):
             if not response:
                 await ctx.send("The model did not return a response. Please try again.")
                 return
-        
+
             for page in response:
                 await ctx.send(page)
 
         except Exception as e:
+        # Send the exception details in a private message to the author
+            try:
+                await author.send(f"There was an error processing your request: {e}")
+            except Exception as dm_error:
+                print(f"Failed to send DM to author: {dm_error}")
+        
             await ctx.send("There was an error processing your request.")
             print(f"Error in chat command: {e}")
