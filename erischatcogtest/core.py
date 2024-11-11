@@ -333,7 +333,6 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             await ctx.send("Can only run in a text channel in a server, not a DM!")
             return
 
-    # Check for image attachments
         attachment = None
         attachments: list[discord.Attachment] = [m for m in message.attachments if m.width]
 
@@ -348,12 +347,10 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             await ctx.send(f"Please provide an image to expand!")
             return
 
-    # Get the image URL and create the prompt from message content
         prompt_words = [w for i, w in enumerate(message.content.split(" ")) if i != 0]
         prompt: str = " ".join(prompt_words)
         thread_name = " ".join(prompt_words[:5]) + " image"
 
-    # Prepare the image file for upload (from URL to local file)
         image_url = attachment.url
         image_response = requests.get(image_url)
 
@@ -367,18 +364,15 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             await ctx.send("API key not configured!")
             return
 
-    # Prepare headers and data for the POST request
         headers = {
             "Authorization": f"Bearer {api_key}"
         }
 
-    # Use multipart/form-data to send the image
         files = {
             "file": ("image.png", image_response.content, "image/png")
         }
 
         try:
-        # Send the image to CablyAI for upscaling
             response = requests.post(
                 "https://cablyai.com/v1/images/upscale",
                 headers=headers,
@@ -386,11 +380,9 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             )
 
             if response.status_code == 200:
-                # Assuming the response contains the URL of the upscaled image
                 with open("expanded_image.png", "wb") as f:
                     f.write(response.content)
 
-            # Send the upscaled image back to the user
                 await ctx.send("Here is the expanded/upscaled image:", file=discord.File("expanded_image.png"))
             else:
                 await ctx.send(f"Error: Could not upscale the image. Status code {response.status_code}")
