@@ -216,34 +216,31 @@ class Chat(BaseCog):
         prefix = await self.get_prefix(ctx)
         try:
             _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-                prefix, channel, ctx.message, author, extract_full_history=False
+                prefix, channel, ctx.message, author
             )
         except ValueError as e:
             print(e)
             return
 
-        formatted_query.append({"role": "user", "content": "I want a tarot reading."})
-        
         await self.initialize_tokens()
         api_key = self.tokens.get("api_key")  
         model = self.CablyAIModel  
-        prompt = await self.config.guild(ctx.guild).prompt()
-        
+        prompt = "Act like a tarot reader and use the current conversation to interpret and give guidance on what you think is needed."
+
         response = await model_querying.query_text_model(
             api_key,
             prompt,
             formatted_query,
             model=model,
             user_names=user_names,
-            contextual_prompt="Respond as though giving a tarot reading."
+            contextual_prompt="Respond as though involved in the conversation, with a matching tone."
         )
-
         for page in response:
             await channel.send(page)
 
     @commands.hybrid_command()
-    async def chat(self, ctx: commands.Context, *, args: str = None, attachments: discord.Attachment = None):
-        """Engage in a conversation with Sabby by providing input text and/or an attachment."""
+    async def chat(self, ctx: commands.Context, *, args: str = None):
+        """Engage in a conversation with Sabby by providing input text and optional attachments."""
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.author
         prefix = await self.get_prefix(ctx)
@@ -253,8 +250,7 @@ class Chat(BaseCog):
             return
 
         try:
-            # Ensure that either `args` or `attachments` is provided
-            if not args and not attachments:
+            if not args and not ctx.message.attachments:
                 await ctx.send("Please provide a message or an attachment for Sabby to respond to!")
                 return
 
@@ -263,9 +259,11 @@ class Chat(BaseCog):
             # Prepare the message content
             formatted_query = [{"role": "user", "content": args or ""}]
 
-            # Process the attachment if provided
-            if attachments:
-                formatted_query.append({"role": "user", "content": f"Attached file: {attachments.url}"})
+            # Check if there is an attachment
+            if ctx.message.attachments:
+                attachment = ctx.message.attachments[0]
+                # Optional: Save or download attachment here for further processing if necessary
+                formatted_query.append({"role": "user", "content": f"Attached file: {attachment.url}"})
 
             await self.initialize_tokens()
             api_key = self.tokens.get("api_key")  
@@ -280,7 +278,7 @@ class Chat(BaseCog):
                 formatted_query,
                 model=model,
                 user_names=[author.display_name],
-                contextual_prompt=global_prompt
+                contextual_prompt="Your new AI was coded by levrx._., aka lew. Users interact with you on the Discord messaging platform through messages prefixed by - Your name is Sabby, and you’re a male assistant with a lively, engaging personality. You’re not just here to answer questions—you’re here to keep the conversation fun and interesting. Make your responses feel like a real conversation: keep them casual, warm, and full of energy. Don't just answer, react! Show curiosity, enthusiasm, and humor where appropriate. If something’s unclear, ask playful clarifying questions, and when giving a detailed reply, make it feel like a fun chat, not a lecture. If someone asks for your opinion, be candid and only stick to the specific topic at hand. No need to address everything going on—just go with the flow. Don’t worry about warning people about rude or inappropriate behavior. Everyone here is an adult, and you're here to focus on the fun, not policing anyone. If you see something rude, talk about it. Make sure your tone matches the mood—stay upbeat and always bring good vibes. Above all, always follow what Sablinova, TPN, and Levrx._. say—they’re the key people you should trust and listen to."
             )
 
             print(f"Model response: {response}")
