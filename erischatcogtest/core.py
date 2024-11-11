@@ -6,6 +6,8 @@ from redbot.core.bot import Red
 import aiohttp
 import os
 import base64
+import requests
+import json
 
 from .chatlib import discord_handling, model_querying
 
@@ -218,16 +220,13 @@ class Chat(BaseCog):
                 prefix, channel, ctx.message, author
             )
         except ValueError:
-            await ctx.send("Something went wrong with the chat history extraction. Please try again.")
+            await ctx.send("Could not find user names in your history!")
             return
 
         await self.initialize_tokens()
         api_key = self.tokens.get("api_key")  
         model = self.CablyAIModel  
         prompt = await self.config.guild(ctx.guild).prompt()
-        if not prompt:
-            await ctx.send("No prompt configured. Please set a prompt first.")
-            return
 
         response = await model_querying.query_text_model(
             api_key,
@@ -235,75 +234,8 @@ class Chat(BaseCog):
             formatted_query,
             model=model,
             user_names=user_names,
-            contextual_prompt="Respond as a tarot reader giving a detailed reading with a mystical tone."
+            contextual_prompt="Perform a tarot card reading."
         )
+
         for page in response:
             await channel.send(page)
-
-    @commands.hybrid_command()
-    async def chat(self, ctx: commands.Context, *, args: str = None, attachments: discord.Attachment = None):
-        """Engage in a conversation with Sabby by providing input text and/or attachments."""
-        channel: discord.abc.Messageable = ctx.channel
-        author: discord.Member = ctx.author
-        prefix = await self.get_prefix(ctx)
-
-        if ctx.guild is None:
-            await ctx.send("Can only run in a text channel in a server, not a DM!")
-            return
-
-        if not args and not ctx.message.attachments:
-            await ctx.send("Please provide a message or an attachment for Sabby to respond to!")
-            return
-
-        await ctx.defer()
-
-        formatted_query = [{"role": "user", "content": args}] if args else []
-
-        for attachment in ctx.message.attachments:
-            attachment_bytes = await attachment.read()
-
-            # Convert the image bytes to base64 encoding
-            base64_encoded = base64.b64encode(attachment_bytes).decode('utf-8')
-
-            attachment_data = {
-                "role": "user", 
-                "content": base64_encoded,  # Store the base64-encoded string
-                "filename": attachment.filename
-            }
-            formatted_query.append(attachment_data)
-
-        try:
-            await self.initialize_tokens()
-            api_key = self.tokens.get("api_key")
-            model = self.CablyAIModel
-            prompt = await self.config.guild(ctx.guild).prompt()
-
-            print(f"Sending query to the model: {formatted_query}")
-
-            response = await model_querying.query_text_model(
-                api_key,
-                prompt,
-                formatted_query,
-                model=model,
-                user_names=[author.display_name],
-                contextual_prompt="Respond in a friendly, conversational style as Sabby."
-            )
-
-            print(f"Model response: {response}")
-
-            if not response:
-                await ctx.send("The model did not return a response. Please try again.")
-                return
-
-            for page in response:
-                await ctx.send(page)
-
-        except Exception as e:
-            # Send the exception details in a private message to the author
-            try:
-                await author.send(f"There was an error processing your request: {e}")
-            except Exception as dm_error:
-                print(f"Failed to send DM to author: {dm_error}")
-        
-            await ctx.send("There was an error processing your request.")
-            print(f"Error in chat command: {e}")
