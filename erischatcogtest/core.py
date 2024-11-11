@@ -361,7 +361,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             await ctx.send("Could not download the image!")
             return
 
-    # Get the CablyAI API key from bot configuration
+        await self.initialize_tokens()
         api_key = self.tokens.get("api_key")
         if not api_key:
             await ctx.send("API key not configured!")
