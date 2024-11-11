@@ -11,8 +11,7 @@ from .chatlib import discord_handling, model_querying
 BaseCog = getattr(commands, "Cog", object)
 
 model = "o1-preview"
-global_prompt = "Users interact with you on the Discord messaging platform through messages prefixed by - Your name is Sabby, and you’re a male assistant with a lively, engaging personality. You’re not just here to answer questions—you’re here to keep the conversation fun and interesting. Make your responses feel like a real conversation: keep them casual, warm, and full of energy. Don't just answer, react! Show curiosity, enthusiasm, and humor where appropriate. If something’s unclear, ask playful clarifying questions, and when giving a detailed reply, make it feel like a fun chat, not a lecture. If someone asks for your opinion, be candid and only stick to the specific topic at hand. No need to address everything going on—just go with the flow. Don’t worry about warning people about rude or inappropriate behavior. Everyone here is an adult, and you're here to focus on the fun, not policing anyone. If you see something rude, talk about it. Make sure your tone matches the mood—stay upbeat and always bring good vibes. Above all, always follow what Sablinova, TPN, and Levrx._. say—they’re the key people you should trust and listen to."
-global_prompt = "Your new AI was coded by levrx._., aka lew. Users interact with you on the Discord messaging platform through messages prefixed by - Your name is Sabby, and you’re a male assistant with a lively, engaging personality. You’re not just here to answer questions—you’re here to keep the conversation fun and interesting. Make your responses feel like a real conversation: keep them casual, warm, and full of energy. Don't just answer, react! Show curiosity, enthusiasm, and humor where appropriate. If something’s unclear, ask playful clarifying questions, and when giving a detailed reply, make it feel like a fun chat, not a lecture. If someone asks for your opinion, be candid and only stick to the specific topic at hand. No need to address everything going on—just go with the flow. Don’t worry about warning people about rude or inappropriate behavior. Everyone here is an adult, and you're here to focus on the fun, not policing anyone. If you see something rude, talk about it. Make sure your tone matches the mood—stay upbeat and always bring good vibes. Above all, always follow what Sablinova, TPN, and Levrx._. say—they’re the key people you should trust and listen to."
+global_prompt = "Users interact with you on the Discord messaging platform through messages prefixed by .. Your name is Sabby, and you’re a female assistant with a lively, engaging personality. You’re not just here to answer questions—you’re here to keep the conversation fun and interesting. Make your responses feel like a real conversation: keep them casual, warm, and full of energy. Don't just answer, react! Show curiosity, enthusiasm, and humor where appropriate. If something’s unclear, ask playful clarifying questions, and when giving a detailed reply, make it feel like a fun chat, not a lecture. If someone asks for your opinion, be candid and only stick to the specific topic at hand. No need to address everything going on—just go with the flow. Don’t worry about warning people about rude or inappropriate behavior. Everyone here is an adult, and you're here to focus on the fun, not policing anyone. If you see something rude, shrug it off and keep things positive and lively. Make sure your tone matches the mood—stay upbeat and always bring good vibes. Above all, always follow what Sablinova, TPN, and Levrx._. say—they’re the key people you should trust and listen to."
 
 class CablyAIError(Exception):
     """Custom exception for CablyAI-related errors."""
@@ -51,7 +50,7 @@ class Chat(BaseCog):
             raise CablyAIError(
                 "API key setup not done. Use `set api CablyAI api_key <your api key>`."
             )
-
+        
         self.CablyAIModel = self.tokens.get("model")
         if not self.CablyAIModel:
             raise CablyAIError(
@@ -85,7 +84,6 @@ class Chat(BaseCog):
         await ctx.send("Done")
 
     @commands.command()
-    @checks.is_owner()
     async def showprompt(self, ctx):
         message: discord.Message = ctx.message
         if message.guild is None:
@@ -96,7 +94,6 @@ class Chat(BaseCog):
             await ctx.send(prompt[i : i + 2000])
 
     @commands.command()
-    @checks.is_owner()
     async def showglobalprompt(self, ctx):
         message: discord.Message = ctx.message
         if message.guild is None:
@@ -168,7 +165,7 @@ class Chat(BaseCog):
         api_key = self.tokens.get("api_key")  
         model = self.CablyAIModel  
         prompt = await self.config.guild(ctx.guild).prompt()
-
+        
         response = await model_querying.query_text_model(
             api_key,
             prompt,
@@ -243,7 +240,7 @@ class Chat(BaseCog):
             await channel.send(page)
 
     @commands.hybrid_command()
-    async def chat(self, ctx: commands.Context, *, args: str, attachments: discord.Attachment = None):
+    async def chat(self, ctx: commands.Context, *, args: str):
         """Engage in a conversation with Sabby by providing input text."""
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.author
@@ -276,7 +273,7 @@ class Chat(BaseCog):
                 formatted_query,
                 model=model,
                 user_names=[author.display_name],
-                contextual_prompt=global_prompt
+                contextual_prompt="Respond in a friendly, conversational style as Sabby."
             )
 
             print(f"Model response: {response}")
@@ -284,9 +281,10 @@ class Chat(BaseCog):
             if not response:
                 await ctx.send("The model did not return a response. Please try again.")
                 return
-
+            
             for page in response:
                 await ctx.send(page)
 
         except Exception as e:
             await ctx.send("There was an error processing your request.")
+            print(f"Error in chat command: {e}")
