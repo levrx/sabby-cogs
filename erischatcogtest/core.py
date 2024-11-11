@@ -292,7 +292,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             "model": model,
             "messages": formatted_query,
             "max_tokens": 300,
-            "contextual_prompt": global_prompt  # Add the global_prompt as contextual_prompt
+            "prompt": global_prompt  # Add the global_prompt as contextual_prompt
         }
 
         headers = {
