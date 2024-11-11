@@ -250,24 +250,20 @@ class Chat(BaseCog):
             await ctx.send("Can only run in a text channel in a server, not a DM!")
             return
 
-    # Handle case when no text or attachments are provided
+
         if not args and not ctx.message.attachments:
             await ctx.send("Please provide a message or an attachment for Sabby to respond to!")
             return
 
         await ctx.defer()
 
-    # Format the user's input text
         formatted_query = [{"role": "user", "content": args}] if args else []
 
-    # Process any attachments (images or files)
         for attachment in ctx.message.attachments:
-        # Read the attachment's data (e.g., image, file)
             attachment_bytes = await attachment.read()
             attachment_data = {"role": "user", "content": attachment_bytes, "filename": attachment.filename}
             formatted_query.append(attachment_data)
 
-    # Prepare for model querying
         try:
             await self.initialize_tokens()
             api_key = self.tokens.get("api_key")
@@ -291,7 +287,6 @@ class Chat(BaseCog):
                 await ctx.send("The model did not return a response. Please try again.")
                 return
         
-        # Send response from the model to the channel
             for page in response:
                 await ctx.send(page)
 
