@@ -240,7 +240,7 @@ class Chat(BaseCog):
             await channel.send(page)
 
     @commands.hybrid_command()
-    async def chat(self, ctx: commands.Context, *, args: str = None):
+    async def chat(self, ctx: commands.Context, *, args: str = None, attachments: discord.Attachment = None):
         """Engage in a conversation with Sabby by providing input text and/or attachments."""
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.author
