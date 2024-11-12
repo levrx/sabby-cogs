@@ -327,10 +327,19 @@ class Chat(commands.Cog):
             await ctx.send("There was an error processing your request.")
             print(f"Error in expand command: {e}")
     
+    async def query_model(self, data, headers, endpoint):
+        """Helper function to send the request to Open WebUI."""
+        async with aiohttp.ClientSession() as session:
+            async with session.post(endpoint, json=data, headers=headers) as response:
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    return None  # Handle errors appropriately
+
     @commands.command()
     async def serverchat(self, ctx: commands.Context, *, args: str = None, attachments: discord.Attachment = None):
         """Engage in a conversation with Sabby using Open WebUI hosted on ai.levrx.lol."""
-
+        
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.author
         prefix = await self.get_prefix(ctx)
@@ -345,10 +354,10 @@ class Chat(commands.Cog):
 
         await ctx.defer()
 
-    # Prepare the query for text and image attachments
+        # Prepare the query for text and image attachments
         formatted_query = [{"role": "user", "content": args}] if args else []
 
-    # Check if the message contains attachments (images)
+        # Check if the message contains attachments (images)
         image_url = next((a.url for a in ctx.message.attachments if a.url), None)
         if image_url:
             formatted_query.append({
@@ -359,11 +368,11 @@ class Chat(commands.Cog):
                 ]
             })
 
-    # Initialize tokens and prompts
-        await self.initialize_tokens()
-        prompt = await self.config.guild(ctx.guild).global_prompt()
+        # Initialize tokens and prompts (you can replace this with your own logic)
+        await self.initialize_tokens()  # Assuming you have a method to initialize tokens
+        prompt = await self.config.guild(ctx.guild).global_prompt()  # Assuming this method exists for prompts
 
-    # Prepare the data payload for the AI request
+        # Prepare the data payload for the AI request
         data = {
             "model": "gpt-4-turbo",  # Replace with your preferred model
             "messages": formatted_query,
@@ -371,23 +380,19 @@ class Chat(commands.Cog):
             "prompt": prompt
         }
 
-    # Define the headers for Open WebUI
+        # Define the headers for Open WebUI
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.tokens.get('api_key')}"  # Replace with your Open WebUI API key
         }
 
-    # Open WebUI endpoint for chat completions
+        # Open WebUI endpoint for chat completions
         endpoint = 'http://ai.levrx.lol/api/chat/completions'  # Replace with your actual Open WebUI endpoint
 
-    # Query the Open WebUI model
-        response = await self.query_model(
-            data,
-            headers,
-            endpoint
-        )
+        # Query the Open WebUI model
+        response = await self.query_model(data, headers, endpoint)
 
         if response:
-            await ctx.send(response)
+            await ctx.send(response.get("choices", [{}])[0].get("message", "No response"))
         else:
             await ctx.send("There was an error processing your request.")
