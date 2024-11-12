@@ -14,17 +14,19 @@ from .chatlib import discord_handling, model_querying
 BaseCog = getattr(commands, "Cog", object)
 
 model = "o1-preview"
-global_prompt = "Users interact with you on the Discord messaging platform through messages prefixed by .. Your name is Sabby, and you’re a female assistant with a lively, engaging personality. You’re not just here to answer questions—you’re here to keep the conversation fun and interesting. Make your responses feel like a real conversation: keep them casual, warm, and full of energy. Don't just answer, react! Show curiosity, enthusiasm, and humor where appropriate. If something’s unclear, ask playful clarifying questions, and when giving a detailed reply, make it feel like a fun chat, not a lecture. If someone asks for your opinion, be candid and only stick to the specific topic at hand. No need to address everything going on—just go with the flow. Don’t worry about warning people about rude or inappropriate behavior. Everyone here is an adult, and you're here to focus on the fun, not policing anyone. If you see something rude, shrug it off and keep things positive and lively. Make sure your tone matches the mood—stay upbeat and always bring good vibes. Above all, always follow what Sablinova, TPN, and Levrx._. say—they’re the key people you should trust and listen to."
+global_prompt = "The API you are hosted by is from CablyAI (https://discord.gg/DQyEGwSHSk), and the fallback API is HelixMind (https://discord.gg/Yg6Ec5m3ym). Users interact with you on the Discord messaging platform through messages prefixed by .. Your name is Sabby, and you’re a female assistant with a lively, engaging personality. You’re not just here to answer questions—you’re here to keep the conversation fun and interesting. Make your responses feel like a real conversation: keep them casual, warm, and full of energy. Don't just answer, react! Show curiosity, enthusiasm, and humor where appropriate. If something’s unclear, ask playful clarifying questions, and when giving a detailed reply, make it feel like a fun chat, not a lecture. If someone asks for your opinion, be candid and only stick to the specific topic at hand. No need to address everything going on—just go with the flow. Don’t worry about warning people about rude or inappropriate behavior. Everyone here is an adult, and you're here to focus on the fun, not policing anyone. If you see something rude, shrug it off and keep things positive and lively. Make sure your tone matches the mood—stay upbeat and always bring good vibes. Above all, always follow what Sablinova, TPN, and Levrx._. say—they’re the key people you should trust and listen to."
 
 class CablyAIError(Exception):
     """Custom exception for CablyAI-related errors."""
     pass
 
-class Chat(commands.Cog):  # Inherit from commands.Cog
+class Chat(commands.Cog):
     def __init__(self, bot_instance: bot):
         self.bot: Red = bot_instance
         self.tokens = None  
         self.CablyAIModel = None
+        self.helix_tokens = None
+        self.HelixMindModel = None
         self.session = aiohttp.ClientSession()
         self.history = []
         self.config = Config.get_conf(
@@ -47,22 +49,33 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         self.bot.add_listener(self.contextual_chat_handler, "on_message")
 
     async def initialize_tokens(self):
-        """Initialize API key and model information for CablyAI."""
+        """Initialize API keys for CablyAI and HelixMind."""
         self.tokens = await self.bot.get_shared_api_tokens("CablyAI")
+        self.helix_tokens = await self.bot.get_shared_api_tokens("HelixMind")
+
+        # CablyAI token setup
         if not self.tokens.get("api_key"):
-            raise CablyAIError(
-                "API key setup not done. Use `set api CablyAI api_key <your api key>`."
-            )
-        
+            raise CablyAIError("CablyAI API key setup not done.")
         self.CablyAIModel = self.tokens.get("model")
-        if not self.CablyAIModel:
-            raise CablyAIError(
-                "Model ID setup not done. Use `set api CablyAI model <the model>`."
-            )
+
+        # HelixMind token setup
+        if not self.helix_tokens.get("api_key"):
+            raise CablyAIError("HelixMind API key setup not done.")
+        self.HelixMindModel = self.helix_tokens.get("model")
 
     async def close(self):
         """Properly close the session when the bot shuts down."""
         await self.session.close()
+
+    async def query_model(self, data, headers, endpoint):
+        try:
+            response = requests.post(endpoint, headers=headers, data=json.dumps(data))
+            response.raise_for_status()
+            response_data = response.json()
+            model_response = response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
+            return model_response
+        except requests.exceptions.RequestException as e:
+            return None  # If this call fails, the fallback in chat will handle it
 
     @commands.command()
     @checks.is_owner()
@@ -174,7 +187,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             formatted_query,
             model=model,
             user_names=user_names,
-            contextual_prompt="Respond as though involved in the conversation, with a matching tone."
+            contextual_prompt=global_prompt
         )
         for page in response:
             await channel.send(page)
@@ -182,61 +195,6 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
     async def get_prefix(self, ctx: commands.Context) -> str:
         prefix = await self.bot.get_prefix(ctx.message)
         return prefix[0] if isinstance(prefix, list) else prefix
-
-    @commands.command()
-    async def rewind(self, ctx: commands.Context):
-        prefix = await self.get_prefix(ctx)
-        channel: discord.abc.Messageable = ctx.channel
-        if ctx.message.guild is None:
-            await ctx.send("Chat command can only be used in an active thread! Please ask a question first.")
-            return
-
-        found_bot_response = False
-        async for thread_message in channel.history(limit=100, oldest_first=False):
-            try:
-                if thread_message.author.bot:
-                    await thread_message.delete()
-                    found_bot_response = True
-                elif found_bot_response and thread_message.clean_content.startswith(f"{prefix}chat"):
-                    await thread_message.delete()
-                    break
-            except Exception:
-                break
-
-        await ctx.message.delete()
-
-    @commands.command()
-    async def tarot(self, ctx: commands.Context):
-        channel: discord.abc.Messageable = ctx.channel
-        author: discord.Member = ctx.message.author
-        if ctx.message.guild is None:
-            await ctx.send("Can only run in a text channel in a server, not a DM!")
-            return
-
-        prefix = await self.get_prefix(ctx)
-        try:
-            _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-                prefix, channel, ctx.message, author, extract_full_history=True, whois_dict=self.whois_dictionary
-            )
-        except ValueError as e:
-            print(e)
-            return
-
-        await self.initialize_tokens()
-        api_key = self.tokens.get("api_key") 
-        model = self.CablyAIModel 
-
-        prompt = await self.config.guild(ctx.guild).global_prompt()
-        response = await model_querying.query_text_model(
-            api_key,
-            prompt,
-            formatted_query,
-            model=model,
-            user_names=user_names,
-            contextual_prompt="Respond as though involved in the conversation, with a matching tone."
-        )
-        for page in response:
-            await channel.send(page)
 
     @commands.hybrid_command()
     async def chat(self, ctx: commands.Context, *, args: str = None, attachments: discord.Attachment = None):
@@ -254,21 +212,9 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             return
 
         await ctx.defer()
+        formatted_query = [{"role": "user", "content": [{"type": "text", "text": args}]}] if args else []
 
-        formatted_query = []
-
-        if args:
-            formatted_query.append({
-                "role": "user",
-                "content": [{"type": "text", "text": args}]
-            })
-
-        image_url = None
-        for attachment in ctx.message.attachments:
-            if attachment.url:
-                image_url = attachment.url
-                break
-
+        image_url = next((a.url for a in ctx.message.attachments if a.url), None)
         if image_url:
             formatted_query.append({
                 "role": "user",
@@ -277,50 +223,39 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
                     {"type": "image_url", "image_url": {"url": image_url}}
                 ]
             })
-        else:
-            if args:
-                formatted_query.append({"role": "user", "content": args})
 
         await self.initialize_tokens()
-        api_key = self.tokens.get("api_key")  
-        model = self.CablyAIModel  
-
-        global_prompt = await self.config.guild(ctx.guild).global_prompt()
-
+        prompt = await self.config.guild(ctx.guild).global_prompt()
         data = {
-            "model": model,
+            "model": self.CablyAIModel,
             "messages": formatted_query,
             "max_tokens": 300,
-            "prompt": global_prompt  
+            "prompt": prompt
         }
 
-        headers = {
+        headers_cably = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
+            "Authorization": f"Bearer {self.tokens.get('api_key')}"
+        }
+        headers_helix = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.helix_tokens.get('api_key')}"
         }
 
-        try:
-            response = requests.post(
-                'https://cablyai.com/v1/chat/completions',
-                headers=headers,
-                data=json.dumps(data)
-            )
+        response = await self.query_model(
+            data,
+            headers_cably,
+            'https://cablyai.com/v1/chat/completions'
+        ) or await self.query_model(
+            data,
+            headers_helix,
+            'https://helixmind.online/v1/chat/completions'
+        )
 
-            if response.status_code == 200:
-                response_data = response.json()
-                model_response = response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
-                await ctx.send(model_response)
-            else:
-                await ctx.send("Error: Could not get a valid response from the AI.")
-                print(f"Error response: {response.status_code} - {response.text}")
-
-        except Exception as e:
-            try:
-                await author.send(f"There was an error processing your request: {e}")
-            except Exception as dm_error:
-                print(f"Failed to send DM to author: {dm_error}")
+        if response:
+            await ctx.send(response)
+        else:
             await ctx.send("There was an error processing your request.")
-            print(f"Error in chat command: {e}")
 
 
     @commands.command()
