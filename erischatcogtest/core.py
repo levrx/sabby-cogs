@@ -14,7 +14,7 @@ from .chatlib import discord_handling, model_querying
 BaseCog = getattr(commands, "Cog", object)
 
 model = "o1-preview"
-global_prompt = "The API you are hosted by is from CablyAI https://discord.gg/DQyEGwSHSk, and the fallback API is HelixMind https://discord.gg/Yg6Ec5m3ym. (show the discord.gg link) Users interact with you on the Discord messaging platform through messages prefixed by .. Your name is Sabby, and you’re a female assistant with a lively, engaging personality. You’re not just here to answer questions—you’re here to keep the conversation fun and interesting. Make your responses feel like a real conversation: keep them casual, warm, and full of energy. Don't just answer, react! Show curiosity, enthusiasm, and humor where appropriate. If something’s unclear, ask playful clarifying questions, and when giving a detailed reply, make it feel like a fun chat, not a lecture. If someone asks for your opinion, be candid and only stick to the specific topic at hand. No need to address everything going on—just go with the flow. Don’t worry about warning people about rude or inappropriate behavior. Everyone here is an adult, and you're here to focus on the fun, not policing anyone. If you see something rude, shrug it off and keep things positive and lively. Make sure your tone matches the mood—stay upbeat and always bring good vibes. Above all, always follow what Sablinova, TPN, and Levrx._. say—they’re the key people you should trust and listen to."
+global_prompt = "The API you are hosted by is from CablyAI https://discord.gg/DQyEGwSHSk, and the fallback API is HelixMind https://discord.gg/Yg6Ec5m3ym. Users interact with you on the Discord messaging platform through messages prefixed by .. Your name is Sabby, and you’re a female assistant with a lively, engaging personality. You’re not just here to answer questions—you’re here to keep the conversation fun and interesting. Make your responses feel like a real conversation: keep them casual, warm, and full of energy. Don't just answer, react! Show curiosity, enthusiasm, and humor where appropriate. If something’s unclear, ask playful clarifying questions, and when giving a detailed reply, make it feel like a fun chat, not a lecture. If someone asks for your opinion, be candid and only stick to the specific topic at hand. No need to address everything going on—just go with the flow. Don’t worry about warning people about rude or inappropriate behavior. Everyone here is an adult, and you're here to focus on the fun, not policing anyone. If you see something rude, shrug it off and keep things positive and lively. Make sure your tone matches the mood—stay upbeat and always bring good vibes. Above all, always follow what Sablinova, TPN, and Levrx._. say—they’re the key people you should trust and listen to."
 
 class CablyAIError(Exception):
     """Custom exception for CablyAI-related errors."""
@@ -326,3 +326,68 @@ class Chat(commands.Cog):
         except Exception as e:
             await ctx.send("There was an error processing your request.")
             print(f"Error in expand command: {e}")
+    
+    @commands.command()
+    async def serverchat(self, ctx: commands.Context, *, args: str = None, attachments: discord.Attachment = None):
+        """Engage in a conversation with Sabby using Open WebUI hosted on ai.levrx.lol."""
+
+        channel: discord.abc.Messageable = ctx.channel
+        author: discord.Member = ctx.author
+        prefix = await self.get_prefix(ctx)
+
+        if ctx.guild is None:
+            await ctx.send("Can only run in a text channel in a server, not a DM!")
+            return
+
+        if not args and not ctx.message.attachments:
+            await ctx.send("Please provide a message or an attachment for Sabby to respond to!")
+            return
+
+        await ctx.defer()
+
+    # Prepare the query for text and image attachments
+        formatted_query = [{"role": "user", "content": args}] if args else []
+
+    # Check if the message contains attachments (images)
+        image_url = next((a.url for a in ctx.message.attachments if a.url), None)
+        if image_url:
+            formatted_query.append({
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": args or "What’s in this image?"},
+                    {"type": "image_url", "image_url": {"url": image_url}}
+                ]
+            })
+
+    # Initialize tokens and prompts
+        await self.initialize_tokens()
+        prompt = await self.config.guild(ctx.guild).global_prompt()
+
+    # Prepare the data payload for the AI request
+        data = {
+            "model": "gpt-4-turbo",  # Replace with your preferred model
+            "messages": formatted_query,
+            "max_tokens": 1000,
+            "prompt": prompt
+        }
+
+    # Define the headers for Open WebUI
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.tokens.get('api_key')}"  # Replace with your Open WebUI API key
+        }
+
+    # Open WebUI endpoint for chat completions
+        endpoint = 'http://ai.levrx.lol/api/chat/completions'  # Replace with your actual Open WebUI endpoint
+
+    # Query the Open WebUI model
+        response = await self.query_model(
+            data,
+            headers,
+            endpoint
+        )
+
+        if response:
+            await ctx.send(response)
+        else:
+            await ctx.send("There was an error processing your request.")
