@@ -61,7 +61,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
                 "Model ID setup not done. Use `set api CablyAI model <the model>`."
             )
 
-        self.NoBrandAI = await self.bot.get_shared_api_tokens("api_key")
+        self.NoBrandAI = await self.bot.get_shared_api_tokens("NoBrandAI")
         if not self.NoBrandAI.get("api_key"):
             raise CablyAIError(
                 "API key setup not done. Use `set api NoBrandAI api_key <your api key>`."
