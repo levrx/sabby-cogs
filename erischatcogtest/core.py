@@ -264,6 +264,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
         # Initialize tokens if not already done
         await self.initialize_tokens()
+        NoBrandAI = self.NoBrandAI.get("api_key")
 
         # Retrieve prompt and model
         prompt = await self.config.guild(ctx.guild).prompt()
@@ -314,7 +315,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             try:
                 # Attempt fallback to NoBrandAI
                 response = await model_querying.query_text_model(
-                    api_key=self.NoBrandAI.get("api_key"),  # No API key if nobrandai doesn’t need one
+                    api_key=NoBrandAI,  # No API key if nobrandai doesn’t need one
                     prompt=prompt,
                     formatted_query=formatted_query,
                     model=model,
