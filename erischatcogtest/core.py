@@ -149,7 +149,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
     
         try:
             config = self.config.guild(ctx.guild)
-            prompt = await config.prompt() or global_prompt  # Fallback to global if prompt is empty
+            prompt = global_prompt  # Fallback to global if prompt is empty
             _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
                 await self.get_prefix(ctx), ctx.channel, message, message.author, extract_full_history=True, whois_dict=self.whois_dictionary
             )
