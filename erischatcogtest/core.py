@@ -20,14 +20,11 @@ class CablyAIError(Exception):
     """Custom exception for CablyAI-related errors."""
     pass
 
-class Chat(commands.Cog):
+class Chat(commands.Cog):  # Inherit from commands.Cog
     def __init__(self, bot_instance: bot):
         self.bot: Red = bot_instance
         self.tokens = None  
         self.CablyAIModel = None
-        self.helix_tokens = None
-        self.nobrandai_tokens = None
-        self.HelixMindModel = None
         self.session = aiohttp.ClientSession()
         self.history = []
         self.config = Config.get_conf(
@@ -50,37 +47,22 @@ class Chat(commands.Cog):
         self.bot.add_listener(self.contextual_chat_handler, "on_message")
 
     async def initialize_tokens(self):
-        """Initialize API keys for CablyAI and HelixMind."""
+        """Initialize API key and model information for CablyAI."""
         self.tokens = await self.bot.get_shared_api_tokens("CablyAI")
-        self.nobrandai_tokens = await self.bot.get_shared_api_tokens("NoBrandAI")
-        self.helix_tokens = await self.bot.get_shared_api_tokens("HelixMind")
-
-        # CablyAI token setup
-        if not self.nobrandai_tokens.get("api_key"):
-            raise CablyAIError("NoBrandAI API key setup not done.")
-        self.CablyAIModel = self.tokens.get("model")
-
         if not self.tokens.get("api_key"):
-            raise CablyAIError("CablyAI API key setup not done.")
+            raise CablyAIError(
+                "API key setup not done. Use `set api CablyAI api_key <your api key>`."
+            )
 
-        # HelixMind token setup
-        if not self.helix_tokens.get("api_key"):
-            raise CablyAIError("HelixMind API key setup not done.")
-        self.HelixMindModel = self.helix_tokens.get("model")
+        self.CablyAIModel = self.tokens.get("model")
+        if not self.CablyAIModel:
+            raise CablyAIError(
+                "Model ID setup not done. Use `set api CablyAI model <the model>`."
+            )
 
     async def close(self):
         """Properly close the session when the bot shuts down."""
         await self.session.close()
-
-    async def query_model(self, data, headers, endpoint):
-        try:
-            response = requests.post(endpoint, headers=headers, data=json.dumps(data))
-            response.raise_for_status()
-            response_data = response.json()
-            model_response = response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
-            return model_response
-        except requests.exceptions.RequestException as e:
-            return None  # If this call fails, the fallback in chat will handle it
 
     @commands.command()
     @checks.is_owner()
@@ -185,14 +167,14 @@ class Chat(commands.Cog):
         api_key = self.tokens.get("api_key")  
         model = self.CablyAIModel  
         prompt = await self.config.guild(ctx.guild).prompt()
-        
+
         response = await model_querying.query_text_model(
             api_key,
             prompt,
             formatted_query,
             model=model,
             user_names=user_names,
-            contextual_prompt=global_prompt
+            contextual_prompt="Respond as though involved in the conversation, with a matching tone."
         )
         for page in response:
             await channel.send(page)
@@ -200,6 +182,61 @@ class Chat(commands.Cog):
     async def get_prefix(self, ctx: commands.Context) -> str:
         prefix = await self.bot.get_prefix(ctx.message)
         return prefix[0] if isinstance(prefix, list) else prefix
+
+    @commands.command()
+    async def rewind(self, ctx: commands.Context):
+        prefix = await self.get_prefix(ctx)
+        channel: discord.abc.Messageable = ctx.channel
+        if ctx.message.guild is None:
+            await ctx.send("Chat command can only be used in an active thread! Please ask a question first.")
+            return
+
+        found_bot_response = False
+        async for thread_message in channel.history(limit=100, oldest_first=False):
+            try:
+                if thread_message.author.bot:
+                    await thread_message.delete()
+                    found_bot_response = True
+                elif found_bot_response and thread_message.clean_content.startswith(f"{prefix}chat"):
+                    await thread_message.delete()
+                    break
+            except Exception:
+                break
+
+        await ctx.message.delete()
+
+    @commands.command()
+    async def tarot(self, ctx: commands.Context):
+        channel: discord.abc.Messageable = ctx.channel
+        author: discord.Member = ctx.message.author
+        if ctx.message.guild is None:
+            await ctx.send("Can only run in a text channel in a server, not a DM!")
+            return
+
+        prefix = await self.get_prefix(ctx)
+        try:
+            _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
+                prefix, channel, ctx.message, author, extract_full_history=True, whois_dict=self.whois_dictionary
+            )
+        except ValueError as e:
+            print(e)
+            return
+
+        await self.initialize_tokens()
+        api_key = self.tokens.get("api_key") 
+        model = self.CablyAIModel 
+
+        prompt = await self.config.guild(ctx.guild).global_prompt()
+        response = await model_querying.query_text_model(
+            api_key,
+            prompt,
+            formatted_query,
+            model=model,
+            user_names=user_names,
+            contextual_prompt="Respond as though involved in the conversation, with a matching tone."
+        )
+        for page in response:
+            await channel.send(page)
 
     @commands.hybrid_command()
     async def chat(self, ctx: commands.Context, *, args: str = None, attachments: discord.Attachment = None):
@@ -217,9 +254,21 @@ class Chat(commands.Cog):
             return
 
         await ctx.defer()
-        formatted_query = [{"role": "user", "content": [{"type": "text", "text": args}]}] if args else []
 
-        image_url = next((a.url for a in ctx.message.attachments if a.url), None)
+        formatted_query = []
+
+        if args:
+            formatted_query.append({
+                "role": "user",
+                "content": [{"type": "text", "text": args}]
+            })
+
+        image_url = None
+        for attachment in ctx.message.attachments:
+            if attachment.url:
+                image_url = attachment.url
+                break
+
         if image_url:
             formatted_query.append({
                 "role": "user",
@@ -228,35 +277,50 @@ class Chat(commands.Cog):
                     {"type": "image_url", "image_url": {"url": image_url}}
                 ]
             })
+        else:
+            if args:
+                formatted_query.append({"role": "user", "content": args})
 
         await self.initialize_tokens()
-        prompt = await self.config.guild(ctx.guild).global_prompt()
+        api_key = self.tokens.get("api_key")  
+        model = self.CablyAIModel  
+
+        global_prompt = await self.config.guild(ctx.guild).global_prompt()
+
         data = {
-            "model": "o1-preview",
+            "model": model,
             "messages": formatted_query,
             "max_tokens": 300,
-            "prompt": global_prompt
+            "prompt": global_prompt  
         }
 
-        headers_cably = {
+        headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.tokens.get('api_key')}"
-        }
-        headers_nobrandai = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.nobrandai_tokens.get('api_key')}"
+            "Authorization": f"Bearer {api_key}"
         }
 
-        response = await self.query_model(
-            data,
-            headers_cably,
-            'https://cablyai.com/v1/chat/completions'
-        )
+        try:
+            response = requests.post(
+                'https://cablyai.com/v1/chat/completions',
+                headers=headers,
+                data=json.dumps(data)
+            )
 
-        if response:
-            await ctx.send(response)
-        else:
+            if response.status_code == 200:
+                response_data = response.json()
+                model_response = response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
+                await ctx.send(model_response)
+            else:
+                await ctx.send("Error: Could not get a valid response from the AI.")
+                print(f"Error response: {response.status_code} - {response.text}")
+
+        except Exception as e:
+            try:
+                await author.send(f"There was an error processing your request: {e}")
+            except Exception as dm_error:
+                print(f"Failed to send DM to author: {dm_error}")
             await ctx.send("There was an error processing your request.")
+            print(f"Error in chat command: {e}")
 
 
     @commands.command()
@@ -269,6 +333,7 @@ class Chat(commands.Cog):
             await ctx.send("Can only run in a text channel in a server, not a DM!")
             return
 
+    # Check for image attachments
         attachment = None
         attachments: list[discord.Attachment] = [m for m in message.attachments if m.width]
 
@@ -283,10 +348,12 @@ class Chat(commands.Cog):
             await ctx.send(f"Please provide an image to expand!")
             return
 
+    # Get the image URL and create the prompt from message content
         prompt_words = [w for i, w in enumerate(message.content.split(" ")) if i != 0]
         prompt: str = " ".join(prompt_words)
         thread_name = " ".join(prompt_words[:5]) + " image"
 
+    # Prepare the image file for upload (from URL to local file)
         image_url = attachment.url
         image_response = requests.get(image_url)
 
@@ -300,15 +367,18 @@ class Chat(commands.Cog):
             await ctx.send("API key not configured!")
             return
 
+    # Prepare headers and data for the POST request
         headers = {
             "Authorization": f"Bearer {api_key}"
         }
 
+    # Use multipart/form-data to send the image
         files = {
             "file": ("image.png", image_response.content, "image/png")
         }
 
         try:
+        # Send the image to CablyAI for upscaling
             response = requests.post(
                 "https://cablyai.com/v1/images/upscale",
                 headers=headers,
@@ -316,9 +386,11 @@ class Chat(commands.Cog):
             )
 
             if response.status_code == 200:
+                # Assuming the response contains the URL of the upscaled image
                 with open("expanded_image.png", "wb") as f:
                     f.write(response.content)
 
+            # Send the upscaled image back to the user
                 await ctx.send("Here is the expanded/upscaled image:", file=discord.File("expanded_image.png"))
             else:
                 await ctx.send(f"Error: Could not upscale the image. Status code {response.status_code}")
@@ -327,73 +399,3 @@ class Chat(commands.Cog):
         except Exception as e:
             await ctx.send("There was an error processing your request.")
             print(f"Error in expand command: {e}")
-    
-    async def query_model(self, data, headers, endpoint):
-        """Helper function to send the request to Open WebUI."""
-        async with aiohttp.ClientSession() as session:
-            async with session.post(endpoint, json=data, headers=headers) as response:
-                if response.status == 200:
-                    return await response.json()
-                else:
-                    return None  # Handle errors appropriately
-
-    @commands.command()
-    async def serverchat(self, ctx: commands.Context, *, args: str = None, attachments: discord.Attachment = None):
-        """Engage in a conversation with Sabby using Open WebUI hosted on ai.levrx.lol."""
-        
-        channel: discord.abc.Messageable = ctx.channel
-        author: discord.Member = ctx.author
-        prefix = await self.get_prefix(ctx)
-
-        if ctx.guild is None:
-            await ctx.send("Can only run in a text channel in a server, not a DM!")
-            return
-
-        if not args and not ctx.message.attachments:
-            await ctx.send("Please provide a message or an attachment for Sabby to respond to!")
-            return
-
-        await ctx.defer()
-
-        # Prepare the query for text and image attachments
-        formatted_query = [{"role": "user", "content": args}] if args else []
-
-        # Check if the message contains attachments (images)
-        image_url = next((a.url for a in ctx.message.attachments if a.url), None)
-        if image_url:
-            formatted_query.append({
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": args or "What’s in this image?"},
-                    {"type": "image_url", "image_url": {"url": image_url}}
-                ]
-            })
-
-        # Initialize tokens and prompts (you can replace this with your own logic)
-        await self.initialize_tokens()  # Assuming you have a method to initialize tokens
-        prompt = await self.config.guild(ctx.guild).global_prompt()  # Assuming this method exists for prompts
-
-        # Prepare the data payload for the AI request
-        data = {
-            "model": "gpt-4-turbo",  # Replace with your preferred model
-            "messages": formatted_query,
-            "max_tokens": 1000,
-            "prompt": prompt
-        }
-
-        # Define the headers for Open WebUI
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.tokens.get('api_key')}"  # Replace with your Open WebUI API key
-        }
-
-        # Open WebUI endpoint for chat completions
-        endpoint = 'http://ai.levrx.lol/api/chat/completions'  # Replace with your actual Open WebUI endpoint
-
-        # Query the Open WebUI model
-        response = await self.query_model(data, headers, endpoint)
-
-        if response:
-            await ctx.send(response.get("choices", [{}])[0].get("message", "No response"))
-        else:
-            await ctx.send("There was an error processing your request.")
