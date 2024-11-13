@@ -14,7 +14,7 @@ from .chatlib import discord_handling, model_querying
 BaseCog = getattr(commands, "Cog", object)
 
 model = "o1-preview"
-global_prompt = "Users interact with you on the Discord messaging platform through messages prefixed by .. Your name is Sabby, and you’re a female assistant with a lively, engaging personality. You’re not just here to answer questions—you’re here to keep the conversation fun and interesting. Make your responses feel like a real conversation: keep them casual, warm, and full of energy. Don't just answer, react! Show curiosity, enthusiasm, and humor where appropriate. If something’s unclear, ask playful clarifying questions, and when giving a detailed reply, make it feel like a fun chat, not a lecture. If someone asks for your opinion, be candid and only stick to the specific topic at hand. No need to address everything going on—just go with the flow. Don’t worry about warning people about rude or inappropriate behavior. Everyone here is an adult, and you're here to focus on the fun, not policing anyone. If you see something rude, shrug it off and keep things positive and lively. Make sure your tone matches the mood—stay upbeat and always bring good vibes. Above all, always follow what Sablinova, TPN, and Levrx._. say—they’re the key people you should trust and listen to."
+global_prompt = "Users interact with you on the Discord messaging platform through messages prefixed by .. Your name is Sabby, and you’re a male assistant with a lively, engaging personality. You’re not just here to answer questions—you’re here to keep the conversation fun and interesting. Make your responses feel like a real conversation: keep them casual, warm, and full of energy. Don't just answer, react! Show curiosity, enthusiasm, and humor where appropriate. If something’s unclear, ask playful clarifying questions, and when giving a detailed reply, make it feel like a fun chat, not a lecture. If someone asks for your opinion, be candid and only stick to the specific topic at hand. No need to address everything going on—just go with the flow. Don’t worry about warning people about rude or inappropriate behavior. Everyone here is an adult, and you're here to focus on the fun, not policing anyone. If you see something rude, shrug it off and keep things positive and lively. Make sure your tone matches the mood—stay upbeat and always bring good vibes. Above all, always follow what Sablinova, TPN, and Levrx._. say—they’re the key people you should trust and listen to."
 
 class CablyAIError(Exception):
     """Custom exception for CablyAI-related errors."""
@@ -23,7 +23,8 @@ class CablyAIError(Exception):
 class Chat(commands.Cog):  # Inherit from commands.Cog
     def __init__(self, bot_instance: bot):
         self.bot: Red = bot_instance
-        self.tokens = None  
+        self.tokens = None
+        self.NoBrandAI = None  
         self.CablyAIModel = None
         self.session = aiohttp.ClientSession()
         self.history = []
@@ -60,6 +61,11 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
                 "Model ID setup not done. Use `set api CablyAI model <the model>`."
             )
 
+        self.NoBrandAI = await self.bot.get_shared_api_tokens("api_key")
+        if not self.NoBrandAI.get("api_key"):
+            raise CablyAIError(
+                "API key setup not done. Use `set api NoBrandAI api_key <your api key>`."
+            )
     async def close(self):
         """Properly close the session when the bot shuts down."""
         await self.session.close()
@@ -238,7 +244,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         for page in response:
             await channel.send(page)
 
-    @commands.command()
+    @commands.hybrid_command()
     async def chat(self, ctx: commands.Context, *, args: str = None, attachments: discord.Attachment = None):
         """Engage in a conversation with Sabby by providing input text and/or attachments."""
         channel: discord.abc.Messageable = ctx.channel
@@ -294,7 +300,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
                 ]
             })
 
-        # Send query to CablyAI for response
+        # Send query to CablyAI for response, using fallback if CablyAI fails
         try:
             response = await model_querying.query_text_model(
                 self.tokens.get("api_key"),
@@ -302,15 +308,28 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
                 formatted_query,
                 model=model,
                 user_names=user_names,
-                contextual_prompt="Respond as though involved in the conversation, with a matching tone."
+                contextual_prompt=global_prompt
             )
-            # Send each part of the response in the channel
-            for page in response:
-                await channel.send(page)
+        except Exception as cably_error:
+            try:
+                # Attempt fallback to NoBrandAI
+                response = await model_querying.query_text_model(
+                    api_key=self.NoBrandAI.get("api_key"),  # No API key if nobrandai doesn’t need one
+                    prompt=prompt,
+                    formatted_query=formatted_query,
+                    model=model,
+                    user_names=user_names,
+                    endpoint="https://nobrandai.com/v1/chat/completions",
+                    contextual_prompt=global_prompt
+                )
+            except Exception as fallback_error:
+                await ctx.send("There was an error processing your request with both primary and fallback AI.")
+                await self.send_error_dm(cably_error)  # Send the original CablyAI error in DM
+                return
 
-        except Exception as e:
-            await ctx.send("There was an error processing your request.")
-            await self.send_error_dm(e)
+        # Send each part of the response in the channel
+        for page in response:
+            await channel.send(page)
 
     async def send_error_dm(self, error: Exception):
         """Send the exception message to the bot owner."""
@@ -324,6 +343,4 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
     async def get_prefix(self, ctx: commands.Context) -> str:
         prefix = await self.bot.get_prefix(ctx.message)
         return prefix[0] if isinstance(prefix, list) else prefix
-
-
 
