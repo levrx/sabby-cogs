@@ -255,11 +255,14 @@ class Chat(commands.Cog):
             "Authorization": f"Bearer {self.nobrandai_tokens.get('api_key')}"
         }
 
-        response = await self.query_model(data, headers_cably,'https://cablyai.com/v1/chat/completions',is_cablyai=True) or await self.query_model(
+        response = await self.query_model(
+            data,
+            headers_cably,
+            'https://cablyai.com/v1/chat/completions'
+        ) or await self.query_model(
             data,
             headers_nobrandai,
-            'https://nobrandai.com/v1/chat/completions',
-            is_nobrandai=True
+            'https://nobrandai.com/v1/chat/completions'
         )
 
         if response:
