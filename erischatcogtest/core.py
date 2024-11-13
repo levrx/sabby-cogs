@@ -72,15 +72,25 @@ class Chat(commands.Cog):
         """Properly close the session when the bot shuts down."""
         await self.session.close()
 
-    async def query_model(self, data, headers, endpoint):
+    async def query_model(self, data, headers, endpoint, is_nobrandai=False):
         try:
-            response = requests.post(endpoint, headers=headers, data=json.dumps(data))
-            response.raise_for_status()
-            response_data = response.json()
-            model_response = response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
-            return model_response
-        except requests.exceptions.RequestException as e:
-            return None  # If this call fails, the fallback in chat will handle it
+            async with aiohttp.ClientSession() as session:
+                async with session.post(endpoint, json=data, headers=headers) as response:
+                    if response.status == 200:
+                        response_data = await response.json()
+                        if is_nobrandai:
+                            # Extract content specifically from NoBrandAI's response format
+                            content = response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
+                            return content  # Return only the content to the user
+                        else:
+                        # Handle the response format for other APIs
+                            return response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
+                    else:
+                        return None  # Handle errors appropriately
+        except Exception as e:
+            print(f"Error querying model: {e}")
+            return None
+
 
     @commands.command()
     @checks.is_owner()
