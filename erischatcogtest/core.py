@@ -14,7 +14,7 @@ from .chatlib import discord_handling, model_querying
 BaseCog = getattr(commands, "Cog", object)
 
 model = "o1-preview"
-global_prompt = "The API you are hosted by is from CablyAI https://discord.gg/DQyEGwSHSk, and the fallback API is HelixMind https://discord.gg/Yg6Ec5m3ym. Users interact with you on the Discord messaging platform through messages prefixed by .. Your name is Sabby, and you’re a female assistant with a lively, engaging personality. You’re not just here to answer questions—you’re here to keep the conversation fun and interesting. Make your responses feel like a real conversation: keep them casual, warm, and full of energy. Don't just answer, react! Show curiosity, enthusiasm, and humor where appropriate. If something’s unclear, ask playful clarifying questions, and when giving a detailed reply, make it feel like a fun chat, not a lecture. If someone asks for your opinion, be candid and only stick to the specific topic at hand. No need to address everything going on—just go with the flow. Don’t worry about warning people about rude or inappropriate behavior. Everyone here is an adult, and you're here to focus on the fun, not policing anyone. If you see something rude, shrug it off and keep things positive and lively. Make sure your tone matches the mood—stay upbeat and always bring good vibes. Above all, always follow what Sablinova, TPN, and Levrx._. say—they’re the key people you should trust and listen to."
+global_prompt = "Users interact with you on the Discord messaging platform through messages prefixed by .. Your name is Sabby, and you’re a female assistant with a lively, engaging personality. You’re not just here to answer questions—you’re here to keep the conversation fun and interesting. Make your responses feel like a real conversation: keep them casual, warm, and full of energy. Don't just answer, react! Show curiosity, enthusiasm, and humor where appropriate. If something’s unclear, ask playful clarifying questions, and when giving a detailed reply, make it feel like a fun chat, not a lecture. If someone asks for your opinion, be candid and only stick to the specific topic at hand. No need to address everything going on—just go with the flow. Don’t worry about warning people about rude or inappropriate behavior. Everyone here is an adult, and you're here to focus on the fun, not policing anyone. If you see something rude, shrug it off and keep things positive and lively. Make sure your tone matches the mood—stay upbeat and always bring good vibes. Above all, always follow what Sablinova, TPN, and Levrx._. say—they’re the key people you should trust and listen to."
 
 class CablyAIError(Exception):
     """Custom exception for CablyAI-related errors."""
@@ -26,6 +26,7 @@ class Chat(commands.Cog):
         self.tokens = None  
         self.CablyAIModel = None
         self.helix_tokens = None
+        self.nobrandai_tokens = None
         self.HelixMindModel = None
         self.session = aiohttp.ClientSession()
         self.history = []
@@ -51,12 +52,16 @@ class Chat(commands.Cog):
     async def initialize_tokens(self):
         """Initialize API keys for CablyAI and HelixMind."""
         self.tokens = await self.bot.get_shared_api_tokens("CablyAI")
+        self.nobrandai_tokens = await self.bot.get_shared_api_tokens("NoBrandAI")
         self.helix_tokens = await self.bot.get_shared_api_tokens("HelixMind")
 
         # CablyAI token setup
+        if not self.nobrandai_tokens.get("api_key"):
+            raise CablyAIError("NoBrandAI API key setup not done.")
+        self.CablyAIModel = self.tokens.get("model")
+
         if not self.tokens.get("api_key"):
             raise CablyAIError("CablyAI API key setup not done.")
-        self.CablyAIModel = self.tokens.get("model")
 
         # HelixMind token setup
         if not self.helix_tokens.get("api_key"):
@@ -237,9 +242,9 @@ class Chat(commands.Cog):
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.tokens.get('api_key')}"
         }
-        headers_helix = {
+        headers_nobrandai = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.helix_tokens.get('api_key')}"
+            "Authorization": f"Bearer {self.nobrandai_tokens.get('api_key')}"
         }
 
         response = await self.query_model(
@@ -248,8 +253,8 @@ class Chat(commands.Cog):
             'https://cablyai.com/v1/chat/completions'
         ) or await self.query_model(
             data,
-            headers_helix,
-            'https://helixmind.online/v1/chat/completions'
+            headers_nobrandai,
+            'https://nobrandai.com/v1/chat/completions'
         )
 
         if response:
