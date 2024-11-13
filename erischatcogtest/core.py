@@ -232,7 +232,7 @@ class Chat(commands.Cog):
         await self.initialize_tokens()
         prompt = await self.config.guild(ctx.guild).global_prompt()
         data = {
-            "model": self.CablyAIModel,
+            "model": "o1-preview",
             "messages": formatted_query,
             "max_tokens": 300,
             "prompt": global_prompt
