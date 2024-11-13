@@ -283,15 +283,15 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
         await self.initialize_tokens()
         api_key = self.tokens.get("api_key")  
-        model = self.CablyAIModel  
+        model = self.CablyAIModel
+        prompt = global_prompt  
 
-        global_prompt = await self.config.guild(ctx.guild).global_prompt()
 
         data = {
             "model": model,
             "messages": formatted_query,
             "max_tokens": 300,
-            "prompt": global_prompt  
+            "prompt": prompt  
         }
 
         headers = {
