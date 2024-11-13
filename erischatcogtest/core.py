@@ -141,33 +141,43 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         self.whois_dictionary = final_dict
 
     async def contextual_chat_handler(self, message: discord.Message):
-        if message.author.bot or self.bot.user not in message.mentions:
+        if message.author.bot:
             return
 
-        ctx = await self.bot.get_context(message)
-        await self.initialize_tokens()
-    
-        try:
-            config = self.config.guild(ctx.guild)
-            prompt = global_prompt  # Fallback to global if prompt is empty
-            _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-                await self.get_prefix(ctx), ctx.channel, message, message.author, extract_full_history=True, whois_dict=self.whois_dictionary
-            )
-        
-            response = await model_querying.query_text_model(
-                api_key=self.tokens["api_key"],
-                prompt=prompt,
-                formatted_query=formatted_query,
-                model=self.CablyAIModel,
-                user_names=user_names,
-                contextual_prompt="Respond in the conversation's tone."
-            )
+        ctx: commands.Context = await self.bot.get_context(message)
+        channel: discord.abc.Messageable = ctx.channel
+        author: discord.Member = message.author
+        bot_mentioned = self.bot.user in message.mentions
+        if not bot_mentioned:
+            return
 
-            for page in response:
-                await ctx.send(page)
-        except Exception as e:
-            await ctx.send("Oops! Something went wrong.")
-            print(f"Error in contextual_chat_handler: {e}")
+        if self.whois_dictionary is None:
+            await self.reset_whois_dictionary()
+
+        prefix: str = await self.get_prefix(ctx)
+        try:
+            _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
+                prefix, channel, message, author, extract_full_history=True, whois_dict=self.whois_dictionary
+            )
+        except ValueError as e:
+            print(e)
+            return
+
+        await self.initialize_tokens()
+        api_key = self.tokens.get("api_key")  
+        model = self.CablyAIModel  
+        prompt = await self.config.guild(ctx.guild).prompt()
+
+        response = await model_querying.query_text_model(
+            api_key,
+            prompt,
+            formatted_query,
+            model=model,
+            user_names=user_names,
+            contextual_prompt="Respond as though involved in the conversation, with a matching tone."
+        )
+        for page in response:
+            await channel.send(page)
 
     async def get_prefix(self, ctx: commands.Context) -> str:
         prefix = await self.bot.get_prefix(ctx.message)
@@ -233,6 +243,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         """Engage in a conversation with Sabby by providing input text and/or attachments."""
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.author
+        prefix = await self.get_prefix(ctx)
 
         if ctx.guild is None:
             await ctx.send("Can only run in a text channel in a server, not a DM!")
@@ -244,23 +255,20 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
         await ctx.defer()
 
-        # Build the message format expected by CablyAI
         formatted_query = []
 
-        # Add text input if provided
         if args:
             formatted_query.append({
                 "role": "user",
                 "content": [{"type": "text", "text": args}]
             })
 
-        # Add the image URL if an attachment is provided
         image_url = None
         for attachment in ctx.message.attachments:
             if attachment.url:
                 image_url = attachment.url
                 break
-    
+
         if image_url:
             formatted_query.append({
                 "role": "user",
@@ -269,30 +277,35 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
                     {"type": "image_url", "image_url": {"url": image_url}}
                 ]
             })
-    
+        else:
+            if args:
+                formatted_query.append({"role": "user", "content": args})
+
         await self.initialize_tokens()
         api_key = self.tokens.get("api_key")  
-        model = self.CablyAIModel
-    
-        # Create the data payload for CablyAI
+        model = self.CablyAIModel  
+
+        global_prompt = await self.config.guild(ctx.guild).global_prompt()
+
         data = {
             "model": model,
             "messages": formatted_query,
-            "max_tokens": 300
+            "max_tokens": 300,
+            "prompt": global_prompt  
         }
-    
+
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}"
         }
-    
+
         try:
             response = requests.post(
                 'https://cablyai.com/v1/chat/completions',
                 headers=headers,
-            data=json.dumps(data)
+                data=json.dumps(data)
             )
-    
+
             if response.status_code == 200:
                 response_data = response.json()
                 model_response = response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
@@ -300,7 +313,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             else:
                 await ctx.send("Error: Could not get a valid response from the AI.")
                 print(f"Error response: {response.status_code} - {response.text}")
-    
+
         except Exception as e:
             try:
                 await author.send(f"There was an error processing your request: {e}")
@@ -311,7 +324,8 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
 
     @commands.command()
-    async def upscale(self, ctx: commands.Context):
+    async def expand(self, ctx: commands.Context):
+    async def expandimage(self, ctx: commands.Context):
 
         channel: discord.abc.Messageable = ctx.channel
         message: discord.Message = ctx.message
@@ -348,7 +362,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             await ctx.send("Could not download the image!")
             return
 
-        await self.initialize_tokens()
+    # Get the CablyAI API key from bot configuration
         api_key = self.tokens.get("api_key")
         if not api_key:
             await ctx.send("API key not configured!")
