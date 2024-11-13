@@ -72,25 +72,23 @@ class Chat(commands.Cog):
         """Properly close the session when the bot shuts down."""
         await self.session.close()
 
-    async def query_model(self, data, headers, endpoint, is_nobrandai=False):
+    async def query_model(self, data, headers, endpoint, is_cablyai=False):
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(endpoint, json=data, headers=headers) as response:
                     if response.status == 200:
                         response_data = await response.json()
-                        if is_nobrandai:
-                            # Extract content specifically from NoBrandAI's response format
+                        if is_cablyai:
+                            # Extract content specifically from CablyAI's response format
                             content = response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
                             return content  # Return only the content to the user
                         else:
-                        # Handle the response format for other APIs
-                            return response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
+                            # Handle response format for other APIs if needed
+                            return response_data
                     else:
                         return None  # Handle errors appropriately
-        except Exception as e:
-            print(f"Error querying model: {e}")
-            return None
-
+        except requests.exceptions.RequestException as e:
+                return None  # If this call fails, the fallback in chat will handle it
 
     @commands.command()
     @checks.is_owner()
@@ -260,11 +258,13 @@ class Chat(commands.Cog):
         response = await self.query_model(
             data,
             headers_cably,
-            'https://cablyai.com/v1/chat/completions'
+            'https://cablyai.com/v1/chat/completions',
+            is_cablyai=True
         ) or await self.query_model(
             data,
             headers_nobrandai,
-            'https://nobrandai.com/v1/chat/completions'
+            'https://nobrandai.com/v1/chat/completions',
+            is_nobrandai=True
         )
 
         if response:
