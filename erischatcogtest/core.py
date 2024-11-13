@@ -141,43 +141,33 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         self.whois_dictionary = final_dict
 
     async def contextual_chat_handler(self, message: discord.Message):
-        if message.author.bot:
+        if message.author.bot or self.bot.user not in message.mentions:
             return
 
-        ctx: commands.Context = await self.bot.get_context(message)
-        channel: discord.abc.Messageable = ctx.channel
-        author: discord.Member = message.author
-        bot_mentioned = self.bot.user in message.mentions
-        if not bot_mentioned:
-            return
-
-        if self.whois_dictionary is None:
-            await self.reset_whois_dictionary()
-
-        prefix: str = await self.get_prefix(ctx)
-        try:
-            _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-                prefix, channel, message, author, extract_full_history=True, whois_dict=self.whois_dictionary
-            )
-        except ValueError as e:
-            print(e)
-            return
-
+        ctx = await self.bot.get_context(message)
         await self.initialize_tokens()
-        api_key = self.tokens.get("api_key")  
-        model = self.CablyAIModel  
-        prompt = await self.config.guild(ctx.guild).prompt()
+    
+        try:
+            config = self.config.guild(ctx.guild)
+            prompt = await config.prompt() or global_prompt  # Fallback to global if prompt is empty
+            _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
+                await self.get_prefix(ctx), ctx.channel, message, message.author, extract_full_history=True, whois_dict=self.whois_dictionary
+            )
+        
+            response = await model_querying.query_text_model(
+                api_key=self.tokens["api_key"],
+                prompt=prompt,
+                formatted_query=formatted_query,
+                model=self.CablyAIModel,
+                user_names=user_names,
+                contextual_prompt="Respond in the conversation's tone."
+            )
 
-        response = await model_querying.query_text_model(
-            api_key,
-            prompt,
-            formatted_query,
-            model=model,
-            user_names=user_names,
-            contextual_prompt="Respond as though involved in the conversation, with a matching tone."
-        )
-        for page in response:
-            await channel.send(page)
+            for page in response:
+                await ctx.send(page)
+        except Exception as e:
+            await ctx.send("Oops! Something went wrong.")
+            print(f"Error in contextual_chat_handler: {e}")
 
     async def get_prefix(self, ctx: commands.Context) -> str:
         prefix = await self.bot.get_prefix(ctx.message)
