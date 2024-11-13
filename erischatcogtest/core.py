@@ -250,27 +250,22 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.author
 
-        # Ensure command is only used in a server
         if ctx.guild is None:
             await ctx.send("Can only run in a text channel in a server, not a DM!")
             return
 
-        # Verify that input is provided
         if not args and not ctx.message.attachments:
             await ctx.send("Please provide a message or an attachment for Sabby to respond to!")
             return
 
         await ctx.defer()
 
-        # Initialize tokens if not already done
         await self.initialize_tokens()
         NoBrandAI = self.NoBrandAI.get("api_key")
 
-        # Retrieve prompt and model
         prompt = await self.config.guild(ctx.guild).prompt()
         model = await self.config.guild(ctx.guild).model()
         
-        # Format message history with discord_handling for better context
         if self.whois_dictionary is None:
             await self.reset_whois_dictionary()
         try:
@@ -283,14 +278,12 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             print(e)
             return
 
-        # Add text input to formatted query if present
         if args:
             formatted_query.append({
                 "role": "user",
                 "content": [{"type": "text", "text": args}]
             })
 
-        # Check for image attachments and add to formatted query if present
         if ctx.message.attachments:
             image_url = ctx.message.attachments[0].url
             formatted_query.append({
@@ -301,7 +294,6 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
                 ]
             })
 
-        # Send query to CablyAI for response, using fallback if CablyAI fails
         try:
             response = await model_querying.query_text_model(
                 self.tokens.get("api_key"),
@@ -313,9 +305,8 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             )
         except Exception as cably_error:
             try:
-                # Attempt fallback to NoBrandAI
                 response = await model_querying.query_text_model(
-                    api_key=NoBrandAI,  # No API key if nobrandai doesn’t need one
+                    api_key=NoBrandAI, 
                     prompt=prompt,
                     formatted_query=formatted_query,
                     model=model,
@@ -325,10 +316,9 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
                 )
             except Exception as fallback_error:
                 await ctx.send("There was an error processing your request with both primary and fallback AI.")
-                await self.send_error_dm(cably_error)  # Send the original CablyAI error in DM
+                await self.send_error_dm(cably_error)  
                 return
 
-        # Send each part of the response in the channel
         for page in response:
             await channel.send(page)
 
