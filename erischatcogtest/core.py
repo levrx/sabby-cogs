@@ -243,7 +243,6 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         """Engage in a conversation with Sabby by providing input text and/or attachments."""
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.author
-        prefix = await self.get_prefix(ctx)
 
         if ctx.guild is None:
             await ctx.send("Can only run in a text channel in a server, not a DM!")
@@ -255,20 +254,23 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
         await ctx.defer()
 
+        # Build the message format expected by CablyAI
         formatted_query = []
 
+        # Add text input if provided
         if args:
             formatted_query.append({
                 "role": "user",
                 "content": [{"type": "text", "text": args}]
             })
 
+        # Add the image URL if an attachment is provided
         image_url = None
         for attachment in ctx.message.attachments:
             if attachment.url:
                 image_url = attachment.url
                 break
-
+    
         if image_url:
             formatted_query.append({
                 "role": "user",
@@ -277,35 +279,30 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
                     {"type": "image_url", "image_url": {"url": image_url}}
                 ]
             })
-        else:
-            if args:
-                formatted_query.append({"role": "user", "content": args})
-
+    
         await self.initialize_tokens()
         api_key = self.tokens.get("api_key")  
         model = self.CablyAIModel
-        prompt = global_prompt  
-
-
+    
+        # Create the data payload for CablyAI
         data = {
             "model": model,
             "messages": formatted_query,
-            "max_tokens": 300,
-            "prompt": prompt  
+            "max_tokens": 300
         }
-
+    
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}"
         }
-
+    
         try:
             response = requests.post(
                 'https://cablyai.com/v1/chat/completions',
                 headers=headers,
-                data=json.dumps(data)
+            data=json.dumps(data)
             )
-
+    
             if response.status_code == 200:
                 response_data = response.json()
                 model_response = response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
@@ -313,7 +310,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             else:
                 await ctx.send("Error: Could not get a valid response from the AI.")
                 print(f"Error response: {response.status_code} - {response.text}")
-
+    
         except Exception as e:
             try:
                 await author.send(f"There was an error processing your request: {e}")
