@@ -78,15 +78,12 @@ class Chat(commands.Cog):
                 async with session.post(endpoint, json=data, headers=headers) as response:
                     if response.status == 200:
                         response_data = await response.json()
-                        if is_cablyai:
-                            # Extract content specifically from CablyAI's response format
-                            content = response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
-                            return content  # Return only the content to the user
-                        else:
-                            # Handle response format for other APIs if needed
-                            return response_data
+                        # Extract content specifically from CablyAI's response format
+                        content = response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
+                        return content  # Return only the content to the user
                     else:
-                        return None  # Handle errors appropriately
+                        # Handle response format for other APIs if needed
+                        return response_data
         except requests.exceptions.RequestException as e:
                 return None  # If this call fails, the fallback in chat will handle it
 
