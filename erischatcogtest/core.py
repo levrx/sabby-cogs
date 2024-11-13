@@ -238,38 +238,53 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         for page in response:
             await channel.send(page)
 
-    @commands.hybrid_command()
+    @commands.command()
     async def chat(self, ctx: commands.Context, *, args: str = None, attachments: discord.Attachment = None):
         """Engage in a conversation with Sabby by providing input text and/or attachments."""
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.author
-        prefix = await self.get_prefix(ctx)
 
+        # Ensure command is only used in a server
         if ctx.guild is None:
             await ctx.send("Can only run in a text channel in a server, not a DM!")
             return
 
+        # Verify that input is provided
         if not args and not ctx.message.attachments:
             await ctx.send("Please provide a message or an attachment for Sabby to respond to!")
             return
 
         await ctx.defer()
 
-        formatted_query = []
+        # Initialize tokens if not already done
+        await self.initialize_tokens()
 
+        # Retrieve prompt and model
+        prompt = await self.config.guild(ctx.guild).prompt()
+        model = await self.config.guild(ctx.guild).model()
+        
+        # Format message history with discord_handling for better context
+        if self.whois_dictionary is None:
+            await self.reset_whois_dictionary()
+        try:
+            (thread_name, formatted_query, user_names) = await discord_handling.extract_chat_history_and_format(
+                await self.get_prefix(ctx), channel, ctx.message, author, extract_full_history=True, whois_dict=self.whois_dictionary
+            )
+        except ValueError as e:
+            await ctx.send("Something went wrong formatting the chat history.")
+            print(e)
+            return
+
+        # Add text input to formatted query if present
         if args:
             formatted_query.append({
                 "role": "user",
                 "content": [{"type": "text", "text": args}]
             })
 
-        image_url = None
-        for attachment in ctx.message.attachments:
-            if attachment.url:
-                image_url = attachment.url
-                break
-
-        if image_url:
+        # Check for image attachments and add to formatted query if present
+        if ctx.message.attachments:
+            image_url = ctx.message.attachments[0].url
             formatted_query.append({
                 "role": "user",
                 "content": [
@@ -277,48 +292,23 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
                     {"type": "image_url", "image_url": {"url": image_url}}
                 ]
             })
-        else:
-            if args:
-                formatted_query.append({"role": "user", "content": args})
 
-        await self.initialize_tokens()
-        api_key = self.tokens.get("api_key")  
-        model = self.CablyAIModel  
-        
-
-        data = {
-            "model": model,
-            "messages": formatted_query,
-            "max_tokens": 300,
-            "prompt": global_prompt,
-            "contextual_prompt": global_prompt  
-        }
-
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
-        }
-
+        # Send query to CablyAI for response
         try:
-            response = requests.post(
-                'https://cablyai.com/v1/chat/completions',
-                headers=headers,
-                data=json.dumps(data)
+            response = await model_querying.query_text_model(
+                self.tokens.get("api_key"),
+                prompt,
+                formatted_query,
+                model=model,
+                user_names=user_names,
+                contextual_prompt="Respond as though involved in the conversation, with a matching tone."
             )
-
-            if response.status_code == 200:
-                response_data = response.json()
-                model_response = response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
-                await ctx.send(model_response)
-            else:
-                await ctx.send("Error: Could not get a valid response from the AI.")
-                print(f"Error response: {response.status_code} - {response.text}")
+            # Send each part of the response in the channel or thread
+            for page in response:
+                await discord_handling.send_response(page, ctx.message, channel, thread_name)
 
         except Exception as e:
-            try:
-                await author.send(f"There was an error processing your request: {e}")
-            except Exception as dm_error:
-                print(f"Failed to send DM to author: {dm_error}")
             await ctx.send("There was an error processing your request.")
             print(f"Error in chat command: {e}")
+
 
