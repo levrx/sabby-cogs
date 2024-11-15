@@ -295,7 +295,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             except Exception as fallback_error:
                 print(f"Fallback AI failed: {fallback_error}")
                 await ctx.send("Oops! I couldn't get a proper response from both primary and fallback AI.")
-                await self.send_error_dm(CablyAIError or fallback_error)  # Send error to bot owner
+                await self.send_error_dm(CablyAIError or fallback_error)
                 return
 
     async def send_error_dm(self, error: Exception):
