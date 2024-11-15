@@ -241,12 +241,12 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         try:
             # Try CablyAI first
             response = await model_querying.query_text_model(
-                self.tokens.get("api_key"),
-                prompt,
                 formatted_query,
+                prompt=formatted_query,
                 model=model,
                 user_names=user_names,
-                contextual_prompt=global_prompt
+                contextual_prompt="You are a lively assistant engaging with the user.",
+                headers={"Authorization": f"Bearer {self.tokens.get('api_key')}"}
             )
 
             # Check if the response is empty
