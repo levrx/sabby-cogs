@@ -300,12 +300,14 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
     async def send_error_dm(self, error: Exception):
         """Send the exception message to the bot owner."""
-        owner = "1027224507913621504"
-        if owner:
-            try:
-                await owner.send(f"An error occurred: {error}")
-            except Exception as e:
-                print(f"Failed to send DM to bot owner: {e}")
+        owner_id = "1027224507913621504"  # Your bot owner's ID
+        try:
+            # Fetch the user object from the ID
+            owner = await self.bot.fetch_user(owner_id)  
+            await owner.send(f"An error occurred: {error}")
+        except Exception as e:
+            print(f"Failed to send DM to bot owner: {e}")
+
 
 
     async def get_prefix(self, ctx: commands.Context) -> str:
