@@ -329,11 +329,6 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
                     contextual_prompt=global_prompt
                 )
 
-                # Validate fallback response
-                if not response or not any(page.strip() for page in response):
-                    await ctx.send("Oops! Both primary and fallback AIs failed to provide a response. Try again later.")
-                    return
-
                 # Send fallback response
                 for page in response:
                     if page and page.strip():
