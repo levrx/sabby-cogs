@@ -268,6 +268,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         
         if self.whois_dictionary is None:
             await self.reset_whois_dictionary()
+
         try:
             prefix = await self.get_prefix(ctx)
             _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
@@ -329,19 +330,30 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
                 )
 
                 # Validate fallback response
-                if response is None or not isinstance(response, list) or all(not page.strip() for page in response):
-                    await ctx.send("Even the fallback AI couldn't process your request. Sorry about that!")
+                if not response or not any(page.strip() for page in response):
+                    await ctx.send("Oops! Both primary and fallback AIs failed to provide a response. Try again later.")
                     return
 
-                # Send valid fallback response
+                # Send fallback response
                 for page in response:
                     if page and page.strip():
                         await channel.send(page)
 
             except Exception as fallback_error:
-                await ctx.send("Both primary and fallback AIs failed. Please try again later!")
-                await self.send_error_dm(fallback_error)
+                print(f"Fallback AI failed: {fallback_error}")
+                await ctx.send("Oops! I couldn't get a proper response from both primary and fallback AI.")
+                await self.send_error_dm(CablyAIError or fallback_error)  # Send error to bot owner
                 return
+
+    async def send_error_dm(self, error: Exception):
+        """Send the exception message to the bot owner."""
+        owner = self.bot.get_user(self.bot.owner_id)
+        if owner:
+            try:
+                await owner.send(f"An error occurred: {error}")
+            except Exception as e:
+                print(f"Failed to send DM to bot owner: {e}")
+
 
     async def send_error_dm(self, error: Exception):
         """Send the exception message to the bot owner."""
