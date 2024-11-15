@@ -66,6 +66,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             raise CablyAIError(
                 "API key setup not done. Use `set api NoBrandAI api_key <your api key>`."
             )
+
     async def close(self):
         """Properly close the session when the bot shuts down."""
         await self.session.close()
@@ -189,239 +190,52 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
     async def get_prefix(self, ctx):
         """Get the bot's prefix for the guild."""
         return await self.bot.get_guild_prefix(ctx.guild)
-    async def get_prefix(self, ctx: commands.Context) -> str:
-        prefix = await self.bot.get_prefix(ctx.message)
-        return prefix[0] if isinstance(prefix, list) else prefix
-
-    @commands.command()
-    async def rewind(self, ctx: commands.Context):
-        prefix = await self.get_prefix(ctx)
-        channel: discord.abc.Messageable = ctx.channel
-        if ctx.message.guild is None:
-            await ctx.send("Chat command can only be used in an active thread! Please ask a question first.")
-            return
-
-        found_bot_response = False
-        async for thread_message in channel.history(limit=100, oldest_first=False):
-            try:
-                if thread_message.author.bot:
-                    await thread_message.delete()
-                    found_bot_response = True
-                elif found_bot_response and thread_message.clean_content.startswith(f"{prefix}chat"):
-                    await thread_message.delete()
-                    break
-            except Exception:
-                break
-
-        await ctx.message.delete()
-
-    @commands.command()
-    async def tarot(self, ctx: commands.Context):
-        channel: discord.abc.Messageable = ctx.channel
-        author: discord.Member = ctx.message.author
-        if ctx.message.guild is None:
-            await ctx.send("Can only run in a text channel in a server, not a DM!")
-            return
-
-        prefix = await self.get_prefix(ctx)
-        try:
-            _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-                prefix, channel, ctx.message, author, extract_full_history=True, whois_dict=self.whois_dictionary
-            )
-        except ValueError as e:
-            print(e)
-            return
-
-        await self.initialize_tokens()
-        api_key = self.tokens.get("api_key") 
-        model = self.CablyAIModel 
-
-        prompt = await self.config.guild(ctx.guild).global_prompt()
-        response = await model_querying.query_text_model(
-            api_key,
-            prompt,
-            formatted_query,
-            model=model,
-            user_names=user_names,
-            contextual_prompt=global_prompt
-        )
-        for page in response:
-            await channel.send(page)
-
-    @commands.hybrid_command()
-    async def chat(self, ctx: commands.Context, *, args: str = None, attachments: discord.Attachment = None):
-        """Engage in a conversation with Sabby by providing input text and/or attachments."""
-        channel: discord.abc.Messageable = ctx.channel
-        author: discord.Member = ctx.author
-
-        if ctx.guild is None:
-            await ctx.send("Can only run in a text channel in a server, not a DM!")
-            return
-
-        if not args and not ctx.message.attachments:
-            await ctx.send("Please provide a message or an attachment for Sabby to respond to!")
-            return
-
-        await ctx.defer()
-
-        await self.initialize_tokens()
-        NoBrandAI = self.NoBrandAI.get("api_key")
-
-        prompt = await self.config.guild(ctx.guild).prompt()
-        model = await self.config.guild(ctx.guild).model()
-        
-        if self.whois_dictionary is None:
-            await self.reset_whois_dictionary()
-
-        try:
-            prefix = await self.get_prefix(ctx)
-            _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-                prefix, channel, ctx.message, author, extract_full_history=True, whois_dict=self.whois_dictionary
-            )
-        except ValueError as e:
-            await ctx.send("Something went wrong formatting the chat history.")
-            print(e)
-            return
-
-        if args:
-            formatted_query.append({
-                "role": "user",
-                "content": [{"type": "text", "text": args}]
-            })
-
-        if ctx.message.attachments:
-            image_url = ctx.message.attachments[0].url
-            formatted_query.append({
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": args or "What’s in this image?"},
-                    {"type": "image_url", "image_url": {"url": image_url}}
-                ]
-            })
-
-        try:
-            response = await model_querying.query_text_model(
-                self.tokens.get("api_key"),
-                prompt,
-                formatted_query,
-                model=model,
-                user_names=user_names,
-                contextual_prompt=global_prompt
-            )
-
-            # Validate response
-            if response is None or response == "":
-                await ctx.send("Oops! I didn't get a proper response. Try again?")
-                return
-
-            # Send valid response
-            for page in response:
-                if page and page.strip():
-                    await channel.send(page)
-
-        except Exception as CablyAIError:
-            await ctx.send("There was an error processing your request. Trying fallback...")
-
-            try:
-                response = await model_querying.query_text_model(
-                    api_key=NoBrandAI, 
-                    prompt=prompt,
-                    formatted_query=formatted_query,
-                    model=model,
-                    user_names=user_names,
-                    endpoint="https://nobrandai.com/v1/chat/completions",
-                    contextual_prompt=global_prompt
-                )
-
-                # Send fallback response
-                for page in response:
-                    if page and page.strip():
-                        await channel.send(page)
-
-            except Exception as fallback_error:
-                print(f"Fallback AI failed: {fallback_error}")
-                await ctx.send("Oops! I couldn't get a proper response from both primary and fallback AI.")
-                await self.send_error_dm(CablyAIError or fallback_error)  # Send error to bot owner
-                return
-
-    async def send_error_dm(self, error: Exception):
-        """Send the exception message to the bot owner."""
-        owner = "1027224507913621504"
-        if owner:
-            try:
-                await owner.send(f"An error occurred: {error}")
-            except Exception as e:
-                print(f"Failed to send DM to bot owner: {e}")
-
-
-    async def get_prefix(self, ctx: commands.Context) -> str:
-        prefix = await self.bot.get_prefix(ctx.message)
-        return prefix[0] if isinstance(prefix, list) else prefix
-
 
     @commands.command()
     async def testcably(self, ctx: commands.Context):
-        """Test the CablyAI API with 'hello there' and send the full response."""
-        try:
-            # Initialize tokens if they haven't been initialized yet
-            await self.initialize_tokens()
+        prefix = await self.get_prefix(ctx)
+        message = "hello there"
 
-            # Prepare the test query and the prompt
-            query = "hello there"
-            model = await self.config.guild(ctx.guild).model()
-            prompt = await self.config.guild(ctx.guild).prompt()
+        # Initialize tokens and make the API call to CablyAI
+        await self.initialize_tokens()
 
-            # Query the CablyAI model
-            formatted_query = f"{global_prompt}\nUser: {query}\nAssistant:"
-            response = await model_querying.query_text_model(
-                self.tokens["api_key"],
-                prompt,
-                formatted_query,
-                model=model,
-                user_names="User",
-                contextual_prompt="Respond casually and engagingly, just like you’re chatting with a friend."
-            )
+        api_key = self.tokens.get("api_key")  
+        model = self.CablyAIModel
+        formatted_query = f"{global_prompt}\n{message}"
+        print(f"Requesting full response from CablyAI with message: {formatted_query}")
 
-            # Send the full response from the CablyAI API
-            if response:
-                await ctx.send(f"**CablyAI Full Response:**\n{response}")
-            else:
-                await ctx.send("No response from CablyAI.")
+        response = await model_querying.query_text_model(
+            api_key,
+            formatted_query,
+            prompt=formatted_query,
+            model=model,
+            user_names=None,
+            contextual_prompt="You are a lively assistant engaging with the user."
+        )
 
-        except CablyAIError as e:
-            await ctx.send(f"Error: {str(e)}")
-        except Exception as e:
-            await ctx.send(f"An unexpected error occurred: {str(e)}")
+        # Send full response (everything from the API response)
+        await ctx.send(f"Full Response: {response}")
 
     @commands.command()
     async def testnobrand(self, ctx: commands.Context):
-        """Test the NoBrandAI API with 'hello there' and send the full response."""
-        try:
-            # Initialize tokens if they haven't been initialized yet
-            await self.initialize_tokens()
+        prefix = await self.get_prefix(ctx)
+        message = "hello there"
 
-            # Prepare the test query and the prompt
-            query = "hello there"
-            fallback_api_key = self.NoBrandAI.get("api_key")  # Get the secondary AI API key
-            fallback_model = "fallback-model"  # Define your fallback model here
-            prompt = await self.config.guild(ctx.guild).prompt()
+        # Initialize tokens and make the API call to NoBrandAI
+        api_key = self.NoBrandAI.get("api_key")  
+        model = model
+        formatted_query = f"{global_prompt}\n{message}"
+        print(f"Requesting full response from NoBrandAI with message: {formatted_query}")
 
-            # Query the NoBrandAI model
-            formatted_query = f"{global_prompt}\nUser: {query}\nAssistant:"
-            response = await model_querying.query_text_model(
-                fallback_api_key,
-                prompt,
-                formatted_query,
-                model=fallback_model,
-                user_names="User",
-                contextual_prompt="Respond casually and engagingly, just like you’re chatting with a friend."
-            )
+        response = await model_querying.query_text_model(
+            api_key,
+            formatted_query,
+            prompt=formatted_query,
+            model=model,
+            user_names=None,
+            contextual_prompt="You are a lively assistant engaging with the user."
+        )
 
-            # Send the full response from the NoBrandAI API
-            if response:
-                await ctx.send(f"**NoBrandAI Full Response:**\n{response}")
-            else:
-                await ctx.send("No response from NoBrandAI.")
+        # Send full response (everything from the API response)
+        await ctx.send(f"Full Response: {response}")
 
-        except Exception as e:
-            await ctx.send(f"An unexpected error occurred: {str(e)}")
