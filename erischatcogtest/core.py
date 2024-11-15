@@ -187,10 +187,6 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         for page in response:
             await channel.send(page)
 
-    async def get_prefix(self, ctx):
-        """Get the bot's prefix for the guild."""
-        return await self.bot.get_guild_prefix(ctx.guild)
-
     @commands.command()
     async def testcably(self, ctx: commands.Context):
         message = "hello there"
