@@ -208,7 +208,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
         prompt = await self.config.guild(ctx.guild).prompt()
         model = await self.config.guild(ctx.guild).model()
-        
+    
         if self.whois_dictionary is None:
             await self.reset_whois_dictionary()
 
@@ -239,6 +239,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             })
 
         try:
+            # Try CablyAI first
             response = await model_querying.query_text_model(
                 self.tokens.get("api_key"),
                 prompt,
@@ -248,9 +249,22 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
                 contextual_prompt=global_prompt
             )
 
-            # Validate response
-            if response is None or response == "":
-                await ctx.send("Oops! I didn't get a proper response. Try again?")
+            # Check if the response is empty
+            if not response or not any(page.strip() for page in response):
+                await ctx.send("CablyAI returned an empty response. Trying fallback...")
+                response = await model_querying.query_text_model(
+                    api_key=NoBrandAI,
+                    prompt=prompt,
+                    formatted_query=formatted_query,
+                    model=model,
+                    user_names=user_names,
+                    endpoint="https://nobrandai.com/v1/chat/completions",
+                    contextual_prompt=global_prompt
+                )
+
+            # Validate response after fallback
+            if not response or not any(page.strip() for page in response):
+                await ctx.send("Oops! I couldn't get a proper response from both primary and fallback AI.")
                 return
 
             # Send valid response
@@ -262,6 +276,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             await ctx.send("There was an error processing your request. Trying fallback...")
 
             try:
+                # Fallback to NoBrandAI in case of failure
                 response = await model_querying.query_text_model(
                     api_key=NoBrandAI, 
                     prompt=prompt,
