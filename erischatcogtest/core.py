@@ -172,19 +172,23 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         await self.initialize_tokens()
         api_key = self.tokens.get("api_key")  
         model = self.CablyAIModel  
-        prompt = await self.config.guild(ctx.guild).prompt()
+        formatted_query = f"{global_prompt}\n{formatted_query}"
+        print(f"Contextual Chat Prompt: {formatted_query}")
 
         response = await model_querying.query_text_model(
             api_key,
-            prompt,
             formatted_query,
+            prompt=formatted_query,
             model=model,
             user_names=user_names,
-            contextual_prompt="Respond as though involved in the conversation, with a matching tone."
+            contextual_prompt="You are a lively assistant engaging with the user."
         )
         for page in response:
             await channel.send(page)
 
+    async def get_prefix(self, ctx):
+        """Get the bot's prefix for the guild."""
+        return await self.bot.get_guild_prefix(ctx.guild)
     async def get_prefix(self, ctx: commands.Context) -> str:
         prefix = await self.bot.get_prefix(ctx.message)
         return prefix[0] if isinstance(prefix, list) else prefix
@@ -354,3 +358,70 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         prefix = await self.bot.get_prefix(ctx.message)
         return prefix[0] if isinstance(prefix, list) else prefix
 
+
+    @commands.command()
+    async def testcably(self, ctx: commands.Context):
+        """Test the CablyAI API with 'hello there' and send the full response."""
+        try:
+            # Initialize tokens if they haven't been initialized yet
+            await self.initialize_tokens()
+
+            # Prepare the test query and the prompt
+            query = "hello there"
+            model = await self.config.guild(ctx.guild).model()
+            prompt = await self.config.guild(ctx.guild).prompt()
+
+            # Query the CablyAI model
+            formatted_query = f"{global_prompt}\nUser: {query}\nAssistant:"
+            response = await model_querying.query_text_model(
+                self.tokens["api_key"],
+                prompt,
+                formatted_query,
+                model=model,
+                user_names="User",
+                contextual_prompt="Respond casually and engagingly, just like you’re chatting with a friend."
+            )
+
+            # Send the full response from the CablyAI API
+            if response:
+                await ctx.send(f"**CablyAI Full Response:**\n{response}")
+            else:
+                await ctx.send("No response from CablyAI.")
+
+        except CablyAIError as e:
+            await ctx.send(f"Error: {str(e)}")
+        except Exception as e:
+            await ctx.send(f"An unexpected error occurred: {str(e)}")
+
+    @commands.command()
+    async def testnobrand(self, ctx: commands.Context):
+        """Test the NoBrandAI API with 'hello there' and send the full response."""
+        try:
+            # Initialize tokens if they haven't been initialized yet
+            await self.initialize_tokens()
+
+            # Prepare the test query and the prompt
+            query = "hello there"
+            fallback_api_key = self.NoBrandAI.get("api_key")  # Get the secondary AI API key
+            fallback_model = "fallback-model"  # Define your fallback model here
+            prompt = await self.config.guild(ctx.guild).prompt()
+
+            # Query the NoBrandAI model
+            formatted_query = f"{global_prompt}\nUser: {query}\nAssistant:"
+            response = await model_querying.query_text_model(
+                fallback_api_key,
+                prompt,
+                formatted_query,
+                model=fallback_model,
+                user_names="User",
+                contextual_prompt="Respond casually and engagingly, just like you’re chatting with a friend."
+            )
+
+            # Send the full response from the NoBrandAI API
+            if response:
+                await ctx.send(f"**NoBrandAI Full Response:**\n{response}")
+            else:
+                await ctx.send("No response from NoBrandAI.")
+
+        except Exception as e:
+            await ctx.send(f"An unexpected error occurred: {str(e)}")
