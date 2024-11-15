@@ -312,8 +312,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
             # Send valid response
             for page in response:
-                if page and page.strip():
-                    await channel.send(page)
+                await channel.send(page)
 
         except Exception as CablyAIError:
             await ctx.send("There was an error processing your request. Trying fallback...")
