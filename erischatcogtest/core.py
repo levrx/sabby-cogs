@@ -278,13 +278,13 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             try:
                 # Fallback to NoBrandAI in case of failure
                 response = await model_querying.query_text_model(
-                    api_key=self.NoBrandAI.get("api_key"), 
                     prompt=prompt,
                     formatted_query=formatted_query,
                     model=model,
                     user_names=user_names,
                     endpoint="https://nobrandai.com/v1/chat/completions",
-                    contextual_prompt=global_prompt
+                    contextual_prompt=global_prompt,
+                    headers={"Authorization": f"Bearer {NoBrandAI}"}
                 )
 
                 # Send fallback response
