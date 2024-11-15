@@ -193,7 +193,6 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
     @commands.command()
     async def testcably(self, ctx: commands.Context):
-        prefix = await self.get_prefix(ctx)
         message = "hello there"
 
         # Initialize tokens and make the API call to CablyAI
@@ -218,7 +217,6 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
     @commands.command()
     async def testnobrand(self, ctx: commands.Context):
-        prefix = await self.get_prefix(ctx)
         message = "hello there"
 
         # Initialize tokens and make the API call to NoBrandAI
