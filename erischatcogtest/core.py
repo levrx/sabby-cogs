@@ -217,15 +217,14 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
         # Initialize tokens and make the API call to NoBrandAI
         api_key = self.NoBrandAI.get("api_key")  
-        model = model
+        model = "o1-preview"
         formatted_query = f"{global_prompt}\n{message}"
         print(f"Requesting full response from NoBrandAI with message: {formatted_query}")
 
         response = await model_querying.query_text_model(
             api_key,
-            formatted_query,
-            prompt=formatted_query,
-            model=self.CablyAIModel,
+            formatted_query,  # Only pass as the first argument
+            model=model,
             user_names=None,
             contextual_prompt="You are a lively assistant engaging with the user."
         )
