@@ -306,7 +306,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             )
 
             # Validate response
-            if response is None or "":
+            if response is None or response == "":
                 await ctx.send("Oops! I didn't get a proper response. Try again?")
                 return
 
