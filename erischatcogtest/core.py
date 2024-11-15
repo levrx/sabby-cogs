@@ -312,7 +312,8 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
             # Send valid response
             for page in response:
-                await channel.send(page)
+                if page and page.strip():
+                    await channel.send(page)
 
         except Exception as CablyAIError:
             await ctx.send("There was an error processing your request. Trying fallback...")
@@ -348,15 +349,6 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             except Exception as e:
                 print(f"Failed to send DM to bot owner: {e}")
 
-
-    async def send_error_dm(self, error: Exception):
-        """Send the exception message to the bot owner."""
-        owner = self.bot.get_user(self.bot.owner_id)
-        if owner:
-            try:
-                await owner.send(f"An error occurred: {error}")
-            except Exception as e:
-                print(f"Failed to send DM to bot owner: {e}")
 
     async def get_prefix(self, ctx: commands.Context) -> str:
         prefix = await self.bot.get_prefix(ctx.message)
