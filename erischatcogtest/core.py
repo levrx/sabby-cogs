@@ -253,7 +253,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             if not response or not any(page.strip() for page in response):
                 await ctx.send("CablyAI returned an empty response. Trying fallback...")
                 response = await model_querying.query_text_model(
-                    api_key=NoBrandAI,
+                    api_key=self.NoBrandAI.get("api_key"),
                     prompt=prompt,
                     formatted_query=formatted_query,
                     model=model,
@@ -278,7 +278,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             try:
                 # Fallback to NoBrandAI in case of failure
                 response = await model_querying.query_text_model(
-                    api_key=NoBrandAI, 
+                    api_key=self.NoBrandAI.get("api_key"), 
                     prompt=prompt,
                     formatted_query=formatted_query,
                     model=model,
