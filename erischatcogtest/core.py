@@ -20,7 +20,7 @@ class CablyAIError(Exception):
     """Custom exception for CablyAI-related errors."""
     pass
 
-class Chat(commands.Cog):  # Inherit from commands.Cog
+class Chat(commands.Cog): 
     def __init__(self, bot_instance: bot):
         self.bot: Red = bot_instance
         self.tokens = None
@@ -239,17 +239,15 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             })
 
         try:
-            # Try CablyAI first
             response = await model_querying.query_text_model(
+                self.tokens.get("api_key"),
+                prompt,
                 formatted_query,
-                prompt=formatted_query,
                 model=model,
                 user_names=user_names,
-                contextual_prompt="You are a lively assistant engaging with the user.",
-                headers={"Authorization": f"Bearer {self.tokens.get('api_key')}"}
+                contextual_prompt=global_prompt
             )
 
-            # Check if the response is empty
             if not response or not any(page.strip() for page in response):
                 await ctx.send("CablyAI returned an empty response. Trying fallback...")
                 response = await model_querying.query_text_model(
@@ -262,12 +260,10 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
                     headers={"Authorization": f"Bearer {NoBrandAI}"}
                 )
 
-            # Validate response after fallback
             if not response or not any(page.strip() for page in response):
                 await ctx.send("Oops! I couldn't get a proper response from both primary and fallback AI.")
                 return
 
-            # Send valid response
             for page in response:
                 if page and page.strip():
                     await channel.send(page)
@@ -276,7 +272,6 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             await ctx.send("There was an error processing your request. Trying fallback...")
 
             try:
-                # Fallback to NoBrandAI in case of failure
                 response = await model_querying.query_text_model(
                     prompt=prompt,
                     formatted_query=formatted_query,
@@ -287,7 +282,6 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
                     headers={"Authorization": f"Bearer {NoBrandAI}"}
                 )
 
-                # Send fallback response
                 for page in response:
                     if page and page.strip():
                         await channel.send(page)
@@ -300,9 +294,8 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
     async def send_error_dm(self, error: Exception):
         """Send the exception message to the bot owner."""
-        owner_id = "1027224507913621504"  # Your bot owner's ID
+        owner_id = "1027224507913621504" 
         try:
-            # Fetch the user object from the ID
             owner = await self.bot.fetch_user(owner_id)  
             await owner.send(f"An error occurred: {error}")
         except Exception as e:
