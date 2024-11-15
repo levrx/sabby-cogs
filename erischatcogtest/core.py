@@ -225,7 +225,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             api_key,
             formatted_query,
             prompt=formatted_query,
-            model=model,
+            model=self.CablyAIModel,
             user_names=None,
             contextual_prompt="You are a lively assistant engaging with the user."
         )
