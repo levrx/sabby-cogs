@@ -303,7 +303,20 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
                 user_names=user_names,
                 contextual_prompt=global_prompt
             )
-        except Exception as cably_error:
+
+            # Validate response
+            if response is None or not isinstance(response, list) or all(not page.strip() for page in response):
+                await ctx.send("Oops! I didn't get a proper response. Try again?")
+                return
+
+            # Send valid response
+            for page in response:
+                if page and page.strip():
+                    await channel.send(page)
+
+        except Exception as CablyAIError:
+            await ctx.send("There was an error processing your request. Trying fallback...")
+
             try:
                 response = await model_querying.query_text_model(
                     api_key=NoBrandAI, 
@@ -314,13 +327,21 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
                     endpoint="https://nobrandai.com/v1/chat/completions",
                     contextual_prompt=global_prompt
                 )
-            except Exception as fallback_error:
-                await ctx.send("There was an error processing your request with both primary and fallback AI.")
-                await self.send_error_dm(cably_error)  
-                return
 
-        for page in response:
-            await channel.send(page)
+                # Validate fallback response
+                if response is None or not isinstance(response, list) or all(not page.strip() for page in response):
+                    await ctx.send("Even the fallback AI couldn't process your request. Sorry about that!")
+                    return
+
+                # Send valid fallback response
+                for page in response:
+                    if page and page.strip():
+                        await channel.send(page)
+
+            except Exception as fallback_error:
+                await ctx.send("Both primary and fallback AIs failed. Please try again later!")
+                await self.send_error_dm(fallback_error)
+                return
 
     async def send_error_dm(self, error: Exception):
         """Send the exception message to the bot owner."""
