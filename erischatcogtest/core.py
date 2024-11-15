@@ -342,7 +342,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
     async def send_error_dm(self, error: Exception):
         """Send the exception message to the bot owner."""
-        owner = self.bot.get_user(self.bot.owner_id)
+        owner = "1027224507913621504"
         if owner:
             try:
                 await owner.send(f"An error occurred: {error}")
