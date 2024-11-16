@@ -315,7 +315,6 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             try:
                 # Attempt fallback to NoBrandAI
                 response = await model_querying.query_text_model(
-                    api_key=NoBrandAI,  # No API key if nobrandai doesn’t need one
                     api_key=NoBrandAI, 
                     prompt=prompt,
                     formatted_query=formatted_query,
