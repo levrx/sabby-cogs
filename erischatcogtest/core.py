@@ -34,12 +34,10 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             cog_name="chat",
         )
 
-        model = self.CablyAIModel.get("model")
-        
         default_guild = {
             "global_prompt": global_prompt,
             "prompt": global_prompt,
-            "model": model,  
+            "model":  "o1-preview",  
         }
         self.config.register_guild(**default_guild)
 
@@ -60,7 +58,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
         self.CablyAIModel = self.tokens.get("model")
         if not self.CablyAIModel:
-            raise CablyAIError(
+            raise CablyAIError( 
                 "Model ID setup not done. Use `set api CablyAI model <the model>`."
             )
 
@@ -83,6 +81,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         contents = " ".join(message.clean_content.split(" ")[1:])  
         await self.config.guild(ctx.guild).prompt.set(contents)
         await ctx.send("Done")
+        
 
     @commands.command()
     @checks.is_owner()
