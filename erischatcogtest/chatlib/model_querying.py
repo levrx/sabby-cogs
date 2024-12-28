@@ -41,7 +41,7 @@ async def query_text_model(
                     "text": (
                         "Users have names prefixed by an `@`, however we know the following real names and titles of "
                         f"some of the users involved,\n{formatted_usernames}\nPlease use their names when possible.\n"
-                        "Your creator's handle is @erisaurus, and her name is Zoe.\n"
+                        "Your creator's handle is @sablinova, and his name is Sol.\n"
                         "To tag a user, use the format, `<@id>`, but only do this if you don't know their real name.\n"
                         f"{today_string}"
                     ),
