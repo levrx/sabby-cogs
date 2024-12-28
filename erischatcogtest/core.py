@@ -37,7 +37,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         default_guild = {
             "global_prompt": global_prompt,
             "prompt": global_prompt,
-            "model":  "o1-preview",  
+            "model":  "searchgpt",  
         }
         self.config.register_guild(**default_guild)
 
