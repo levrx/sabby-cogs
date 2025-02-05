@@ -37,8 +37,10 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         default_guild = {
             "global_prompt": global_prompt,
             "prompt": global_prompt,
-            "model":  "searchgpt",  
+            "model":  "searchgpt",
+            "sabby_ping_enabled": False  
         }
+
         self.config.register_guild(**default_guild)
 
         self.data_dir = "/home/sol/.local/share/Red-DiscordBot/data/Sablinova/cogs/erischatcogtest"
@@ -67,6 +69,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             raise CablyAIError(
                 "API key setup not done. Use `set api NoBrandAI api_key <your api key>`."
             )
+
     async def close(self):
         """Properly close the session when the bot shuts down."""
         await self.session.close()
@@ -135,19 +138,6 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         for i in range(0, len(model), 2000):
             await ctx.send(model[i : i + 2000])
 
-    async def reset_whois_dictionary(self):
-        self.whois = self.bot.get_cog("WhoIs")
-        if self.whois is None:
-            self.whois_dictionary = {}
-            return
-        whois_config = self.whois.config
-        guilds: list[discord.Guild] = self.bot.guilds
-        final_dict = {}
-        for guild in guilds:
-            guild_name = guild.name
-            final_dict[guild_name] = (await whois_config.guild(guild).whois_dict()) or dict()
-        self.whois_dictionary = final_dict
-
     async def contextual_chat_handler(self, message: discord.Message):
         if message.author.bot:
             return
@@ -156,6 +146,16 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = message.author
         bot_mentioned = self.bot.user in message.mentions
+
+        if not bot_mentioned:
+            # Check if Sabby ping is enabled and message contains 'sabby!' or 'sabby?'
+            sabby_ping_enabled = await self.config.guild(ctx.guild).sabby_ping_enabled()
+            if sabby_ping_enabled and ("sabby!" in message.content.lower() or "sabby?" in message.content.lower()):
+                # Send the whole message to the AI if it's a ping to Sabby
+                message_content = message.content
+                await self.process_ai_query(ctx, message_content, author, channel)
+                return  # Skip the regular bot mention handling
+
         if not bot_mentioned:
             return
 
@@ -184,6 +184,30 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             user_names=user_names,
             contextual_prompt="Respond as though involved in the conversation, with a matching tone."
         )
+        for page in response:
+            await channel.send(page)
+
+    async def process_ai_query(self, ctx, message_content, author, channel):
+        """Process the query and send to the AI."""
+        await self.initialize_tokens()
+        prompt = await self.config.guild(ctx.guild).prompt()
+        model = await self.config.guild(ctx.guild).model()
+
+        # Format the query
+        formatted_query = [{"role": "user", "content": message_content}]
+        user_names = {author.name: author.id}
+
+        # Send query to AI model
+        response = await model_querying.query_text_model(
+            self.tokens.get("api_key"),
+            prompt,
+            formatted_query,
+            model=model,
+            user_names=user_names,
+            contextual_prompt=global_prompt
+        )
+
+        # Send AI's response to the channel
         for page in response:
             await channel.send(page)
 
@@ -246,6 +270,47 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         for page in response:
             await channel.send(page)
 
+    async def send_error_dm(self, error: Exception):
+        """Send the exception message to the bot owner."""
+        owner = self.bot.get_user(self.bot.owner_id)
+        if owner:
+            try:
+                await owner.send(f"An error occurred: {error}")
+            except Exception as e:
+                print(f"Failed to send DM to bot owner: {e}")
+
+
+
+    async def get_prefix(self, ctx: commands.Context) -> str:
+        prefix = await self.bot.get_prefix(ctx.message)
+        return prefix[0] if isinstance(prefix, list) else prefix
+
+    async def reset_whois_dictionary(self):
+        self.whois = self.bot.get_cog("WhoIs")
+        if self.whois is None:
+            self.whois_dictionary = {}
+            return
+        whois_config = self.whois.config
+        guilds: list[discord.Guild] = self.bot.guilds
+        final_dict = {}
+        for guild in guilds:
+            guild_name = guild.name
+            final_dict[guild_name] = (await whois_config.guild(guild).whois_dict()) or dict()
+        self.whois_dictionary = final_dict
+
+
+    @commands.command()
+    @checks.is_owner()
+    async def enablesabbyping(self, ctx: commands.Context, status: bool):
+        """Enable or disable the feature where messages containing 'sabby!' or 'sabby?' are sent to the AI."""
+        if ctx.guild is None:
+            await ctx.send("Can only run in a text channel in a server, not a DM!")
+            return
+    
+        await self.config.guild(ctx.guild).sabby_ping_enabled.set(status)
+        status_text = "enabled" if status else "disabled"
+        await ctx.send(f"Sabby ping has been {status_text} for this server.")
+
     @commands.hybrid_command()
     async def chat(self, ctx: commands.Context, *, args: str = None, attachments: discord.Attachment = None):
         """Engage in a conversation with Sabby by providing input text and/or attachments."""
@@ -297,65 +362,18 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             image_url = ctx.message.attachments[0].url
             formatted_query.append({
                 "role": "user",
-                "content": [
-                    {"type": "text", "text": args or "What’s in this image?"},
-                    {"type": "image_url", "image_url": {"url": image_url}}
-                ]
+                "content": [{"type": "image", "url": image_url}]
             })
 
-        # Send query to CablyAI for response, using fallback if CablyAI fails
-        try:
-            response = await model_querying.query_text_model(
-                self.tokens.get("api_key"),
-                prompt,
-                formatted_query,
-                model=model,
-                user_names=user_names,
-                contextual_prompt=global_prompt
-            )
-        except Exception as cably_error:
-            try:
-                # Attempt fallback to NoBrandAI
-                response = await model_querying.query_text_model(
-                    api_key=NoBrandAI, 
-                    prompt=prompt,
-                    formatted_query=formatted_query,
-                    model=model,
-                    user_names=user_names,
-                    endpoint="https://nobrandai.com/v1/chat/completions",
-                    contextual_prompt=global_prompt
-                )
-            except Exception as fallback_error:
-                await ctx.send("There was an error processing your request with both primary and fallback AI.")
-                await self.send_error_dm(cably_error)  # Send the original CablyAI error in DM
-                await self.send_error_dm(cably_error)  
-                return
-
-        # Send each part of the response in the channel
+        # Retrieve AI's response
+        response = await model_querying.query_text_model(
+            NoBrandAI,
+            prompt,
+            formatted_query,
+            model=model,
+            user_names=user_names,
+            contextual_prompt=global_prompt
+        )
         for page in response:
             await channel.send(page)
-
-    async def send_error_dm(self, error: Exception):
-        """Send the exception message to the bot owner."""
-        owner = self.bot.get_user(self.bot.owner_id)
-        if owner:
-            try:
-                await owner.send(f"An error occurred: {error}")
-            except Exception as e:
-                print(f"Failed to send DM to bot owner: {e}")
-                
-    async def send_error_dm(self, error: Exception):
-        """Send the exception message to the bot owner."""
-        owner_id = "1027224507913621504" 
-        try:
-            owner = await self.bot.fetch_user(owner_id)  
-            await owner.send(f"An error occurred: {error}")
-        except Exception as e:
-            print(f"Failed to send DM to bot owner: {e}")
-
-
-
-    async def get_prefix(self, ctx: commands.Context) -> str:
-        prefix = await self.bot.get_prefix(ctx.message)
-        return prefix[0] if isinstance(prefix, list) else prefix
 
