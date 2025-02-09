@@ -307,6 +307,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             if response.status_code == 200:
                 response_data = response.json()
                 model_response = response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
+                print(f"Using model: {self.CablyAIModel}")
                 await ctx.send(model_response)
             else:
                 await ctx.send("Error: Could not get a valid response from the AI.")
