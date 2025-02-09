@@ -53,13 +53,12 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             raise CablyAIError(
                 "API key setup not done. Use `set api CablyAI api_key <your api key>`."
             )
-
-        self.CablyAIModel = self.tokens.get("model") or model  # Fallback to default
+        
+        self.CablyAIModel = self.tokens.get("model")
         if not self.CablyAIModel:
             raise CablyAIError(
                 "Model ID setup not done. Use `set api CablyAI model <the model>`."
-           )
-
+            )
 
     async def close(self):
         """Properly close the session when the bot shuts down."""
@@ -299,15 +298,14 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         try:
             response = requests.post(
                 'https://cablyai.com/v1/chat/completions',
+                
                 headers=headers,
-                json=data  # Ensure the request body is correctly formatted
+                data=json.dumps(data)
             )
-
 
             if response.status_code == 200:
                 response_data = response.json()
                 model_response = response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
-                await ctx.send(f"Using model: {self.CablyAIModel}")
                 await ctx.send(model_response)
             else:
                 await ctx.send("Error: Could not get a valid response from the AI.")
