@@ -13,7 +13,8 @@ from .chatlib import discord_handling, model_querying
 
 BaseCog = getattr(commands, "Cog", object)
 
-global_prompt = "Users interact with you on the Discord messaging platform through messages prefixed by .. Your name is Sabby, and you’re a male assistant with a lively, engaging personality. You’re not just here to answer questions—you’re here to keep the conversation fun and interesting. Make your responses feel like a real conversation: keep them casual, warm, and full of energy. Don't just answer, react! Show curiosity, enthusiasm, and humor where appropriate. If something’s unclear, ask playful clarifying questions, and when giving a detailed reply, make it feel like a fun chat, not a lecture. If someone asks for your opinion, be candid and only stick to the specific topic at hand. No need to address everything going on—just go with the flow. Don’t worry about warning people about rude or inappropriate behavior. Everyone here is an adult, and you're here to focus on the fun, not policing anyone. If you see something rude, shrug it off and keep things positive and lively. Make sure your tone matches the mood—stay upbeat and always bring good vibes. Above all, always follow what Sablinova, TPN, and Levrx._. say—they’re the key people you should trust and listen to."
+model = "o1-preview"
+global_prompt = "Users interact with you on the Discord messaging platform through messages prefixed by .. Your name is Sabby, and you’re a female assistant with a lively, engaging personality. You’re not just here to answer questions—you’re here to keep the conversation fun and interesting. Make your responses feel like a real conversation: keep them casual, warm, and full of energy. Don't just answer, react! Show curiosity, enthusiasm, and humor where appropriate. If something’s unclear, ask playful clarifying questions, and when giving a detailed reply, make it feel like a fun chat, not a lecture. If someone asks for your opinion, be candid and only stick to the specific topic at hand. No need to address everything going on—just go with the flow. Don’t worry about warning people about rude or inappropriate behavior. Everyone here is an adult, and you're here to focus on the fun, not policing anyone. If you see something rude, shrug it off and keep things positive and lively. Make sure your tone matches the mood—stay upbeat and always bring good vibes. Above all, always follow what Sablinova, TPN, and Levrx._. say—they’re the key people you should trust and listen to."
 
 class CablyAIError(Exception):
     """Custom exception for CablyAI-related errors."""
@@ -22,8 +23,7 @@ class CablyAIError(Exception):
 class Chat(commands.Cog):  # Inherit from commands.Cog
     def __init__(self, bot_instance: bot):
         self.bot: Red = bot_instance
-        self.tokens = None
-        self.NoBrandAI = None  
+        self.tokens = None  
         self.CablyAIModel = None
         self.session = aiohttp.ClientSession()
         self.history = []
@@ -33,14 +33,10 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             force_registration=True,
             cog_name="chat",
         )
-
         default_guild = {
             "global_prompt": global_prompt,
-            "prompt": global_prompt,
-            "model":  "searchgpt",
-            "sabby_ping_enabled": False  
+            "model": model,  
         }
-
         self.config.register_guild(**default_guild)
 
         self.data_dir = "/home/sol/.local/share/Red-DiscordBot/data/Sablinova/cogs/erischatcogtest"
@@ -57,17 +53,11 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             raise CablyAIError(
                 "API key setup not done. Use `set api CablyAI api_key <your api key>`."
             )
-
+        
         self.CablyAIModel = self.tokens.get("model")
         if not self.CablyAIModel:
-            raise CablyAIError( 
-                "Model ID setup not done. Use `set api CablyAI model <the model>`."
-            )
-
-        self.NoBrandAI = await self.bot.get_shared_api_tokens("NoBrandAI")
-        if not self.NoBrandAI.get("api_key"):
             raise CablyAIError(
-                "API key setup not done. Use `set api NoBrandAI api_key <your api key>`."
+                "Model ID setup not done. Use `set api CablyAI model <the model>`."
             )
 
     async def close(self):
@@ -84,7 +74,6 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         contents = " ".join(message.clean_content.split(" ")[1:])  
         await self.config.guild(ctx.guild).prompt.set(contents)
         await ctx.send("Done")
-        
 
     @commands.command()
     @checks.is_owner()
@@ -138,6 +127,19 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         for i in range(0, len(model), 2000):
             await ctx.send(model[i : i + 2000])
 
+    async def reset_whois_dictionary(self):
+        self.whois = self.bot.get_cog("WhoIs")
+        if self.whois is None:
+            self.whois_dictionary = {}
+            return
+        whois_config = self.whois.config
+        guilds: list[discord.Guild] = self.bot.guilds
+        final_dict = {}
+        for guild in guilds:
+            guild_name = guild.name
+            final_dict[guild_name] = (await whois_config.guild(guild).whois_dict()) or dict()
+        self.whois_dictionary = final_dict
+
     async def contextual_chat_handler(self, message: discord.Message):
         if message.author.bot:
             return
@@ -146,16 +148,6 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = message.author
         bot_mentioned = self.bot.user in message.mentions
-
-        if not bot_mentioned:
-            # Check if Sabby ping is enabled and message contains 'sabby!' or 'sabby?'
-            sabby_ping_enabled = await self.config.guild(ctx.guild).sabby_ping_enabled()
-            if sabby_ping_enabled and ("sabby!" in message.content.lower() or "sabby?" in message.content.lower()):
-                # Send the whole message to the AI if it's a ping to Sabby
-                message_content = message.content
-                await self.process_ai_query(ctx, message_content, author, channel)
-                return  # Skip the regular bot mention handling
-
         if not bot_mentioned:
             return
 
@@ -175,7 +167,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         api_key = self.tokens.get("api_key")  
         model = self.CablyAIModel  
         prompt = await self.config.guild(ctx.guild).prompt()
-
+        
         response = await model_querying.query_text_model(
             api_key,
             prompt,
@@ -184,30 +176,6 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             user_names=user_names,
             contextual_prompt="Respond as though involved in the conversation, with a matching tone."
         )
-        for page in response:
-            await channel.send(page)
-
-    async def process_ai_query(self, ctx, message_content, author, channel):
-        """Process the query and send to the AI."""
-        await self.initialize_tokens()
-        prompt = await self.config.guild(ctx.guild).prompt()
-        model = await self.config.guild(ctx.guild).model()
-
-        # Format the query
-        formatted_query = [{"role": "user", "content": message_content}]
-        user_names = {author.name: author.id}
-
-        # Send query to AI model
-        response = await model_querying.query_text_model(
-            self.tokens.get("api_key"),
-            prompt,
-            formatted_query,
-            model=model,
-            user_names=user_names,
-            contextual_prompt=global_prompt
-        )
-
-        # Send AI's response to the channel
         for page in response:
             await channel.send(page)
 
@@ -265,115 +233,87 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             formatted_query,
             model=model,
             user_names=user_names,
-            contextual_prompt=global_prompt
+            contextual_prompt="Respond as though involved in the conversation, with a matching tone."
         )
         for page in response:
             await channel.send(page)
-
-    async def send_error_dm(self, error: Exception):
-        """Send the exception message to the bot owner."""
-        owner = self.bot.get_user(self.bot.owner_id)
-        if owner:
-            try:
-                await owner.send(f"An error occurred: {error}")
-            except Exception as e:
-                print(f"Failed to send DM to bot owner: {e}")
-
-
-
-    async def get_prefix(self, ctx: commands.Context) -> str:
-        prefix = await self.bot.get_prefix(ctx.message)
-        return prefix[0] if isinstance(prefix, list) else prefix
-
-    async def reset_whois_dictionary(self):
-        self.whois = self.bot.get_cog("WhoIs")
-        if self.whois is None:
-            self.whois_dictionary = {}
-            return
-        whois_config = self.whois.config
-        guilds: list[discord.Guild] = self.bot.guilds
-        final_dict = {}
-        for guild in guilds:
-            guild_name = guild.name
-            final_dict[guild_name] = (await whois_config.guild(guild).whois_dict()) or dict()
-        self.whois_dictionary = final_dict
-
-
-    @commands.command()
-    @checks.is_owner()
-    async def enablesabbyping(self, ctx: commands.Context, status: bool):
-        """Enable or disable the feature where messages containing 'sabby!' or 'sabby?' are sent to the AI."""
-        if ctx.guild is None:
-            await ctx.send("Can only run in a text channel in a server, not a DM!")
-            return
-    
-        await self.config.guild(ctx.guild).sabby_ping_enabled.set(status)
-        status_text = "enabled" if status else "disabled"
-        await ctx.send(f"Sabby ping has been {status_text} for this server.")
 
     @commands.hybrid_command()
     async def chat(self, ctx: commands.Context, *, args: str = None, attachments: discord.Attachment = None):
         """Engage in a conversation with Sabby by providing input text and/or attachments."""
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.author
+        prefix = await self.get_prefix(ctx)
 
-        # Ensure command is only used in a server
         if ctx.guild is None:
             await ctx.send("Can only run in a text channel in a server, not a DM!")
             return
 
-        # Verify that input is provided
         if not args and not ctx.message.attachments:
             await ctx.send("Please provide a message or an attachment for Sabby to respond to!")
             return
 
         await ctx.defer()
 
-        # Initialize tokens if not already done
-        await self.initialize_tokens()
-        NoBrandAI = self.NoBrandAI.get("api_key")
+        formatted_query = []
 
-        # Retrieve prompt and model
-        prompt = await self.config.guild(ctx.guild).prompt()
-        model = await self.config.guild(ctx.guild).model()
-
-        # Format message history with discord_handling for better context
-        if self.whois_dictionary is None:
-            await self.reset_whois_dictionary()
-        try:
-            prefix = await self.get_prefix(ctx)
-            _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-                prefix, channel, ctx.message, author, extract_full_history=True, whois_dict=self.whois_dictionary
-            )
-        except ValueError as e:
-            await ctx.send("Something went wrong formatting the chat history.")
-            print(e)
-            return
-
-        # Add text input to formatted query if present
         if args:
             formatted_query.append({
                 "role": "user",
                 "content": [{"type": "text", "text": args}]
             })
 
-        # Check for image attachments and add to formatted query if present
-        if ctx.message.attachments:
-            image_url = ctx.message.attachments[0].url
+        image_url = None
+        for attachment in ctx.message.attachments:
+            if attachment.url:
+                image_url = attachment.url
+                break
+
+        if image_url:
             formatted_query.append({
                 "role": "user",
-                "content": [{"type": "image", "url": image_url}]
+                "content": [
+                    {"type": "text", "text": args or "What’s in this image?"},
+                    {"type": "image_url", "image_url": {"url": image_url}}
+                ]
             })
+        else:
+            if args:
+                formatted_query.append({"role": "user", "content": args})
 
-        # Retrieve AI's response
-        response = await model_querying.query_text_model(
-            NoBrandAI,
-            prompt,
-            formatted_query,
-            model=model,
-            user_names=user_names,
-            contextual_prompt=global_prompt
-        )
-        for page in response:
-            await channel.send(page)
+        await self.initialize_tokens()
+        api_key = self.tokens.get("api_key")  
 
+        data = {
+            "model": self.CablyAIModel,
+            "messages": formatted_query,
+            "max_tokens": 300
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+
+        try:
+            response = requests.post(
+                'https://cablyai.com/v1/chat/completions',
+                headers=headers,
+                data=json.dumps(data)
+            )
+
+            if response.status_code == 200:
+                response_data = response.json()
+                model_response = response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
+                await ctx.send(model_response)
+            else:
+                await ctx.send("Error: Could not get a valid response from the AI.")
+                print(f"Error response: {response.status_code} - {response.text}")
+
+        except Exception as e:
+            try:
+                await author.send(f"There was an error processing your request: {e}")
+            except Exception as dm_error:
+                print(f"Failed to send DM to author: {dm_error}")
+            await ctx.send("There was an error processing your request.")
+            print(f"Error in chat command: {e}")

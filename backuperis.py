@@ -285,7 +285,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         api_key = self.tokens.get("api_key")  
 
         data = {
-            "model": "gpt-4o",
+            "model": self.CablyAIModel,
             "messages": formatted_query,
             "max_tokens": 300
         }
