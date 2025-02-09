@@ -298,6 +298,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         try:
             response = requests.post(
                 'https://cablyai.com/v1/chat/completions',
+                model=model,
                 headers=headers,
                 data=json.dumps(data)
             )
