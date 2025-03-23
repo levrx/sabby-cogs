@@ -240,82 +240,43 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             await channel.send(page)
 
     @commands.hybrid_command()
-    async def chat(self, ctx: commands.Context, *, args: str = None, attachments: discord.Attachment = None):
-        """Engage in a conversation with Sabby by providing input text and/or attachments."""
+    async def chat(self, ctx: commands.Context, *, args: Optional[str] = None, attachments: Optional[discord.Attachment] = None):
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.author
-        prefix = await self.get_prefix(ctx)
-
-        if ctx.guild is None:
-            await ctx.send("Can only run in a text channel in a server, not a DM!")
+        
+        if not args:
+            await ctx.send("Please provide a message for Sabby to respond to!")
             return
-
-        if not args and not ctx.message.attachments:
-            await ctx.send("Please provide a message or an attachment for Sabby to respond to!")
-            return
-
+        
         await ctx.defer()
-
-        formatted_query = []
-
-        if args:
-            formatted_query.append({
-                "role": "user",
-                "content": [{"type": "text", "text": args}]
-            })
-
-        image_url = None
-        for attachment in ctx.message.attachments:
-            if attachment.url:
-                image_url = attachment.url
-                break
-
-        if image_url:
-            formatted_query.append({
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": args or "What’s in this image?"},
-                    {"type": "image_url", "image_url": {"url": image_url}}
-                ]
-            })
-        else:
-            if args:
-                formatted_query.append({"role": "user", "content": args})
-
-        await self.initialize_tokens()
-        api_key = self.tokens.get("api_key")  
-
-        data = {
-            "model": self.CablyAIModel,
-            "messages": formatted_query,
-            "max_tokens": 300
-        }
-
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
-        }
-
+        
+        formatted_query: List[Dict[str, Any]] = [{
+            "role": "user",
+            "content": [{"type": "text", "text": args}]
+        }]
+        
         try:
+            await self.initialize_tokens()
+            api_key: str = self.tokens.get("api_key", "")
+            data: Dict[str, Any] = {
+                "model": self.CablyAIModel,
+                "messages": formatted_query,
+                "max_tokens": 300
+            }
+            headers: Dict[str, str] = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
             response = requests.post(
                 'https://cablyai.com/v1/chat/completions',
-                
                 headers=headers,
                 data=json.dumps(data)
             )
-
             if response.status_code == 200:
                 response_data = response.json()
-                model_response = response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
+                model_response: str = response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
                 await ctx.send(model_response)
             else:
-                await ctx.send("Error: Could not get a valid response from the AI.")
-                print(f"Error response: {response.status_code} - {response.text}")
-
+                await ctx.send(f"Error: Could not get a valid response from the AI. Response Code: {response.status_code}")
         except Exception as e:
-            try:
-                await author.send(f"There was an error processing your request: {e}")
-            except Exception as dm_error:
-                print(f"Failed to send DM to author: {dm_error}")
-            await ctx.send("There was an error processing your request.")
-            print(f"Error in chat command: {e}")
+            await ctx.send(f"An error occurred: {e}")
