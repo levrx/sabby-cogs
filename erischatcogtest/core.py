@@ -35,7 +35,8 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         )
         default_guild = {
             "global_prompt": global_prompt,
-            "model": model,  
+            "model": model,
+            "prompt": "You are Sabby."  
         }
         self.config.register_guild(**default_guild)
 
