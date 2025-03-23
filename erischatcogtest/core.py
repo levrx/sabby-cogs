@@ -240,7 +240,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             await channel.send(page)
 
     @commands.hybrid_command()
-    async def chat(self, ctx: commands.Context, *, args: Optional[str] = None, attachments: Optional[discord.Attachment] = None):
+    async def chat(self, ctx: commands.Context, *, args: str = None, attachments: discord.Attachment = None):
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.author
         
