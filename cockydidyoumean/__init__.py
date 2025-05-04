@@ -56,18 +56,6 @@ class DidYouMean(commands.Cog):
                 view = ConfirmView(ctx.author, timeout=30)
                 to_execute = ctx.message.content.lstrip(ctx.prefix).replace(ctx.invoked_with, best_match, 1)
                 message = f"no you meant **{best_match}** idiot."
-                if to_execute != best_match:
-                    message += f"\nConfirming will execute `{(execute := ctx.message.content.lstrip(ctx.prefix).replace(ctx.invoked_with, best_match, 1))}`."
-                view.message = await ctx.send(message, view=view, delete_after=30)
-                await view.wait()
-                if view.result:
-                    ctx.message.content = execute
-                    await self.bot.process_commands(ctx.message)
-
-                try:
-                    await view.message.delete()
-                except discord.NotFound:
-                    pass
 
 
 async def setup(bot: Red):
