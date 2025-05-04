@@ -53,7 +53,7 @@ class DidYouMean(commands.Cog):
                     best_match = cmd
 
             if best_match and highest_ratio >= await self.config.threshold():
-                suggestion = f"No such command. Did you mean **{best_match}**?"
+                suggestion = f"no u meant **{best_match}** idiot."
                 await ctx.send(suggestion)
 
 
