@@ -54,8 +54,10 @@ class DidYouMean(commands.Cog):
 
             if best_match and highest_ratio >= await self.config.threshold():
                 view = ConfirmView(ctx.author, timeout=30)
-                to_execute = ctx.message.content.lstrip(ctx.prefix).replace(ctx.invoked_with, best_match, 1)
                 message = f"no you meant **{best_match}** idiot."
+
+                except discord.NotFound:
+                    pass
 
 
 async def setup(bot: Red):
