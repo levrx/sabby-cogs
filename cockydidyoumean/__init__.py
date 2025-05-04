@@ -53,11 +53,8 @@ class DidYouMean(commands.Cog):
                     best_match = cmd
 
             if best_match and highest_ratio >= await self.config.threshold():
-                view = ConfirmView(ctx.author, timeout=30)
-                message = f"no you meant **{best_match}** idiot."
-
-                except discord.NotFound:
-                    pass
+                suggestion = f"No such command. Did you mean **{best_match}**?"
+                await ctx.send(suggestion)
 
 
 async def setup(bot: Red):
