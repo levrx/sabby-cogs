@@ -5,8 +5,8 @@ from redbot.core import commands, data_manager, bot, Config, checks, app_command
 from redbot.core.bot import Red
 import aiohttp
 import os
-import base64
-import requests
+import base64       # needs fixing for type in chat when contacting ai, also needs to error out in chat if it errors out instead of doing
+import requests                                                                                                                 # nothing
 import json
 
 from .chatlib import discord_handling, model_querying
