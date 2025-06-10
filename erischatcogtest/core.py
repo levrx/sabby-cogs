@@ -165,7 +165,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             return
 
         await self.initialize_tokens()
-        api_key = self.tokens.get("api_key")  
+        api_key = self.tokens.get("api_key") 
         model = "gpt-4o"
         prompt = await self.config.guild(ctx.guild).prompt()
         
@@ -252,7 +252,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         
         formatted_query: List[Dict[str, Any]] = [{
             "role": "user",
-            "content": [{"type": "text", "text": args}]
+            "content": args
         }]
         
         try:
