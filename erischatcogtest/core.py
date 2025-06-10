@@ -10,6 +10,7 @@ import requests                                                                 
 import json
 
 from .chatlib import discord_handling, model_querying
+from openai import OpenAI
 
 BaseCog = getattr(commands, "Cog", object)
 
@@ -243,40 +244,35 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
     async def chat(self, ctx: commands.Context, *, args: str = None, attachments: discord.Attachment = None):
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.author
-        
+
         if not args:
             await ctx.send("Please provide a message for Sabby to respond to!")
             return
-        
+
         await ctx.defer()
-        
+
         formatted_query: List[Dict[str, Any]] = [{
             "role": "user",
             "content": args
         }]
-        
+
         try:
             await self.initialize_tokens()
             api_key: str = self.tokens.get("api_key", "")
-            data: Dict[str, Any] = {
-                "model": self.CablyAIModel,
-                "messages": formatted_query,
-                "max_tokens": 300
-            }
-            headers: Dict[str, str] = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}"
-            }
-            response = requests.post(
-                'https://api.exomlapi.com/v1/chat/completions',
-                headers=headers,
-                data=json.dumps(data)
+
+            client = OpenAI(
+                api_key=api_key,
+                base_url="https://api.exomlapi.com/v1"
             )
-            if response.status_code == 200:
-                response_data = response.json()
-                model_response: str = response_data.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
-                await ctx.send(model_response)
-            else:
-                await ctx.send(f"Error: Could not get a valid response from the AI. Response Code: {response.status_code}")
+
+            response = client.chat.completions.create(
+                model=self.CablyAIModel,
+                messages=formatted_query,
+                max_tokens=300
+            )
+
+            model_response: str = response.choices[0].message.content
+            await ctx.send(model_response)
+
         except Exception as e:
             await ctx.send(f"An error occurred: {e}")
