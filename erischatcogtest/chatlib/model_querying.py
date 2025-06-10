@@ -130,8 +130,8 @@ async def async_cablyai_client_and_query(token: str, messages: str | list[dict],
     }
 
     url = (
-        "https://cablyai.com/v1/images" if "model" in kwargs and kwargs["model"].startswith("dall")
-        else "https://cablyai.com/v1/chat/completions"
+        "https://api.exomlapi.com/v1/images/generations" if "model" in kwargs and kwargs["model"].startswith("dall")
+        else "https://api.exomlapi.com/v1/chat/completions"
     )
 
     payload = {"model": kwargs.get("model"), "messages": messages, "stream": False}
