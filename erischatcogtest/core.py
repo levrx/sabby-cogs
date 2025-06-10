@@ -166,7 +166,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
         await self.initialize_tokens()
         api_key = self.tokens.get("api_key")  
-        model = self.CablyAIModel  
+        model = model
         prompt = await self.config.guild(ctx.guild).prompt()
         
         response = await model_querying.query_text_model(
