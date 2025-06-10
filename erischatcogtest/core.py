@@ -268,7 +268,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
                 "Authorization": f"Bearer {api_key}"
             }
             response = requests.post(
-                'https://cablyai.com/v1/chat/completions',
+                'https://api.exomlapi.com/v1/chat/completions',
                 headers=headers,
                 data=json.dumps(data)
             )
