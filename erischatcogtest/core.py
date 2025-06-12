@@ -260,18 +260,21 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             await self.initialize_tokens()
             api_key: str = self.tokens.get("api_key", "")
 
-            client = OpenAI(
+            client = AsyncOpenAI(
                 api_key=api_key,
                 base_url="https://api.zukijourney.com/v1"
             )
 
-            response = client.chat.completions.create(
+            response = await client.chat.completions.create(
                 model=self.CablyAIModel,
                 messages=formatted_query,
                 max_tokens=300
             )
 
-            model_response: str = response.choices[0].message.content
+            model_response: str = response.choices[0].message.content.strip()
+            if len(model_response) > 2000:
+                model_response = model_response[:1997] + "..."
+
             await ctx.send(model_response)
 
         except Exception as e:
