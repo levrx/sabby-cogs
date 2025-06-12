@@ -1,13 +1,12 @@
 {
     "author": ["levrx"],
     "install_msg": "",
-    "name": "CablyAI Chatbot",
+    "name": "Zuki Chatbot",
     "disabled": false,
-    "short": "Chatbot using the Cably AI API.",
-    "description": "Chatbot using the Cably AI API.",
+    "short": "Chatbot using the Zuki AI API.",
+    "description": "Chatbot using the Zuki AI API.",
     "tags": [
         "ai",
-        "cablyai",
         "chat",
         "openai"
     ],
