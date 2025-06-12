@@ -245,7 +245,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         channel: discord.abc.Messageable = ctx.channel
         author: discord.Member = ctx.author
 
-        if not args:
+        if not args or not args.strip():
             await ctx.send("Please provide a message for Sabby to respond to!")
             return
 
@@ -253,7 +253,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
         formatted_query: List[Dict[str, Any]] = [{
             "role": "user",
-            "content": args
+            "content": args.strip()
         }]
 
         try:
