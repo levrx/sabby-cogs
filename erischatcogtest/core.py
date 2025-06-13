@@ -188,69 +188,70 @@ class Chat(BaseCog):
         for page in response:
             await channel.send(page)
 
-    @commands.Cog.listener()
-    async def on_message(self, message):
-        if message.author == self.bot.user:
-            return
+@commands.Cog.listener()
+async def on_message(self, message: discord.Message):
+    # Ignore messages from bots or self
+    if message.author.bot or message.author == self.bot.user:
+        return
 
-        try:
-            prefix = await self.get_prefix(message)
-            _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-                prefix, message.channel, message, message.author, extract_full_history=True
+    # Only trigger if the bot is mentioned
+    if self.bot.user not in message.mentions:
+        return
+
+    ctx = await self.bot.get_context(message)
+
+    try:
+        prefix = await self.get_prefix(ctx)
+        _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
+            prefix, message.channel, message, message.author, extract_full_history=True
+        )
+    except ValueError as e:
+        print(e)
+        return
+
+    formatted_query.insert(0, {
+        "role": "system",
+        "content": GLOBAL_PROMPT
+    })
+
+    openai_formatted_messages = [
+        {
+            "role": msg["role"],
+            "content": str(msg["content"])
+        }
+        for msg in formatted_query
+        if msg.get("role") and msg.get("content")
+    ]
+
+    try:
+        await self.initialize_tokens()
+        client = OpenAI(api_key=self.tokens["api_key"])
+
+        async with message.channel.typing():
+            response = await client.chat.completions.create(
+                model=self.CablyAIModel,
+                messages=openai_formatted_messages,
+                max_tokens=1500
             )
-        except ValueError as e:
-            print(e)
-            return
 
-        formatted_query.insert(0, {
-            "role": "system",
-            "content": GLOBAL_PROMPT
-        })
+        if response.choices:
+            reply = response.choices[0].message.content.strip()
+            if len(reply) > 2000:
+                reply = reply[:1997] + "..."
 
-        # Convert to OpenAI's expected format
-        openai_formatted_messages = [
-            {
-                "role": msg["role"],
-                "content": str(msg["content"])
-            }
-            for msg in formatted_query
-            if msg.get("role") and msg.get("content")
-        ]
+            await message.channel.send(reply)
 
-        try:
-            async with message.channel.typing():
-                try:
-                    response = await self.client.chat.completions.create(
-                        model=MODEL,
-                        messages=openai_formatted_messages,
-                        max_tokens=1500
-                    )
-                except Exception as primary_error:
-                    print(f"Primary API failed: {primary_error}")
-                    response = await self.fallback_client.chat.completions.create(
-                        model=FALLBACK_MODEL,
-                        messages=openai_formatted_messages,
-                        max_tokens=1500
-                    )
+            self.history.append({
+                "role": "assistant",
+                "content": [{"type": "text", "text": reply}]
+            })
+            self.history = self.history[-10:]
+        else:
+            await message.channel.send("I couldn't generate a response.")
 
-            if response.choices:
-                reply = response.choices[0].message.content.strip()
-                if len(reply) > 2000:
-                    reply = reply[:1997] + "..."
-
-                await message.channel.send(reply)
-
-                self.history.append({
-                    "role": "assistant",
-                    "content": [{"type": "text", "text": reply}]
-                })
-                self.history = self.history[-10:]
-            else:
-                await message.channel.send("I couldn't generate a response.")
-
-        except OpenAIError as e:
-            await message.channel.send("Error contacting the AI. Please try again later.")
-            print(f"OpenAI error: {e}")
-        except Exception as e:
-            await message.channel.send("Unexpected error occurred.")
-            print(f"Unexpected error in AI: {e}")
+    except OpenAIError as e:
+        await message.channel.send("Error contacting the AI. Please try again later.")
+        print(f"OpenAI error: {e}")
+    except Exception as e:
+        await message.channel.send("Unexpected error occurred.")
+        print(f"Unexpected error in AI: {e}")
