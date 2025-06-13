@@ -135,9 +135,11 @@ class Chat(BaseCog):
     async def contextual_chat_handler(self, message: discord.Message):
         if message.author.bot:
             return
+
         ctx = await self.bot.get_context(message)
         channel = ctx.channel
         author = message.author
+
         if self.bot.user not in message.mentions:
             return
 
@@ -145,29 +147,38 @@ class Chat(BaseCog):
             await self.reset_whois_dictionary()
 
         prefix = await self.get_prefix(ctx)
+
         try:
             _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-                prefix, channel, message, author, extract_full_history=True, whois_dict=self.whois_dictionary
+                prefix,
+                channel,
+                message,
+                author,
+                extract_full_history=True,
+                whois_dict=self.whois_dictionary,
             )
         except ValueError as e:
             print(f"ValueError in extract_chat_history_and_format: {e}")
-            return
+            formatted_query = []
 
-        # Debug print to verify content
-        print("DEBUG: formatted_query content:")
-        for msg in formatted_query:
-            print(f"Role: {msg.get('role')}, Content: '{msg.get('content')}'")
-
+        # If there's no usable history, just use the current message
         if not any(
             isinstance(msg.get("content"), str) and msg.get("content").strip()
             for msg in formatted_query
         ):
-            await channel.send("Sorry, I don't have enough conversation history to respond.")
-            return
+            content = message.clean_content.replace(f"<@{self.bot.user.id}>", "").strip()
+            if not content:
+                await channel.send("Please say something after mentioning me!")
+                return
+            formatted_query = [{"role": "user", "content": content}]
+
+        # Optional: debug print
+        print("DEBUG: formatted_query content:")
+        for msg in formatted_query:
+            print(f"Role: {msg.get('role')}, Content: '{msg.get('content')}'")
 
         try:
             await self.initialize_tokens()
-
         except CablyAIError as e:
             await channel.send(str(e))
             return
@@ -176,7 +187,6 @@ class Chat(BaseCog):
         model = self.CablyAIModel
         prompt = await self.config.guild(ctx.guild).prompt()
 
-        # Query your AI model
         response = await model_querying.query_text_model(
             api_key,
             prompt,
@@ -185,6 +195,7 @@ class Chat(BaseCog):
             user_names=user_names,
             contextual_prompt="Respond as though involved in the conversation, with a matching tone."
         )
+
         for page in response:
             await channel.send(page)
 
