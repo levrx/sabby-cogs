@@ -133,103 +133,121 @@ class Chat(BaseCog):
         self.whois_dictionary = final_dict
 
     async def contextual_chat_handler(self, message: discord.Message):
-    if message.author.bot:
-        return
-    ctx = await self.bot.get_context(message)
-    channel = ctx.channel
-    author = message.author
-    if self.bot.user not in message.mentions:
-        return
+        if message.author.bot:
+            return
+        ctx = await self.bot.get_context(message)
+        channel = ctx.channel
+        author = message.author
+        if self.bot.user not in message.mentions:
+            return
 
-    if self.whois_dictionary is None:
-        await self.reset_whois_dictionary()
+        if self.whois_dictionary is None:
+            await self.reset_whois_dictionary()
 
-    prefix = await self.get_prefix(ctx)
-    try:
-        _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-            prefix, channel, message, author, extract_full_history=True, whois_dict=self.whois_dictionary
+        prefix = await self.get_prefix(ctx)
+        try:
+            _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
+                prefix, channel, message, author, extract_full_history=True, whois_dict=self.whois_dictionary
+            )
+        except ValueError as e:
+            print(f"ValueError in extract_chat_history_and_format: {e}")
+            return
+
+        # Debug print to verify content
+        print("DEBUG: formatted_query content:")
+        for msg in formatted_query:
+            print(f"Role: {msg.get('role')}, Content: '{msg.get('content')}'")
+
+        if not any(msg.get("content") and msg.get("content").strip() for msg in formatted_query):
+            await channel.send("Sorry, I don't have enough conversation history to respond.")
+            return
+
+        try:
+            await self.initialize_tokens()
+
+        except CablyAIError as e:
+            await channel.send(str(e))
+            return
+
+        api_key = self.tokens.get("api_key")
+        model = self.CablyAIModel
+        prompt = await self.config.guild(ctx.guild).prompt()
+
+        # Query your AI model
+        response = await model_querying.query_text_model(
+            api_key,
+            prompt,
+            formatted_query,
+            model=model,
+            user_names=user_names,
+            contextual_prompt="Respond as though involved in the conversation, with a matching tone."
         )
-    except ValueError as e:
-        print(f"ValueError in extract_chat_history_and_format: {e}")
-        return
-
-    # Debug print to verify content
-    print("DEBUG: formatted_query content:")
-    for msg in formatted_query:
-        print(f"Role: {msg.get('role')}, Content: '{msg.get('content')}'")
-
-    if not any(msg.get("content") and msg.get("content").strip() for msg in formatted_query):
-        await channel.send("Sorry, I don't have enough conversation history to respond.")
-        return
-
-    try:
-        await self.initialize_tokens()
-
+        for page in response:
+            await channel.send(page)
 
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author == self.bot.user:
             return
 
-            try:
-                prefix = await self.get_prefix(message)
-                _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-                    prefix, message.channel, message, message.author, extract_full_history=True
-                )
-            except ValueError as e:
-                print(e)
-                return
+        try:
+            prefix = await self.get_prefix(message)
+            _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
+                prefix, message.channel, message, message.author, extract_full_history=True
+            )
+        except ValueError as e:
+            print(e)
+            return
 
-            formatted_query.insert(0, {
-                "role": "system",
-                "content": GLOBAL_PROMPT
-            })
+        formatted_query.insert(0, {
+            "role": "system",
+            "content": GLOBAL_PROMPT
+        })
 
-            # Convert to OpenAI's expected format
-            openai_formatted_messages = [
-                {
-                    "role": msg["role"],
-                    "content": str(msg["content"])
-                }
-                for msg in formatted_query
-                if msg.get("role") and msg.get("content")
-            ]
+        # Convert to OpenAI's expected format
+        openai_formatted_messages = [
+            {
+                "role": msg["role"],
+                "content": str(msg["content"])
+            }
+            for msg in formatted_query
+            if msg.get("role") and msg.get("content")
+        ]
 
-            try:
-                async with message.channel.typing():
-                    try:
-                        response = await self.client.chat.completions.create(
-                            model=MODEL,
-                            messages=openai_formatted_messages,
-                            max_tokens=1500
-                        )
-                    except Exception as primary_error:
-                        print(f"Primary API failed: {primary_error}")
-                        response = await self.fallback_client.chat.completions.create(
-                            model=FALLBACK_MODEL,
-                            messages=openai_formatted_messages,
-                            max_tokens=1500
-                        )
+        try:
+            async with message.channel.typing():
+                try:
+                    response = await self.client.chat.completions.create(
+                        model=MODEL,
+                        messages=openai_formatted_messages,
+                        max_tokens=1500
+                    )
+                except Exception as primary_error:
+                    print(f"Primary API failed: {primary_error}")
+                    response = await self.fallback_client.chat.completions.create(
+                        model=FALLBACK_MODEL,
+                        messages=openai_formatted_messages,
+                        max_tokens=1500
+                    )
 
-                if response.choices:
-                    reply = response.choices[0].message.content.strip()
-                    if len(reply) > 2000:
-                        reply = reply[:1997] + "..."
+            if response.choices:
+                reply = response.choices[0].message.content.strip()
+                if len(reply) > 2000:
+                    reply = reply[:1997] + "..."
 
-                    await message.channel.send(reply)
+                await message.channel.send(reply)
 
+                self.history.append({
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": reply}]
+                })
+                self.history = self.history[-10:]
+            else:
+                await message.channel.send("I couldn't generate a response.")
 
-                    self.history.append({
-                        "role": "assistant",
-                        "content": [{"type": "text", "text": reply}]
-                    })
-                    self.history = self.history[-10:]
-                else:
-                    await message.channel.send("I couldn't generate a response.")
-
-            except OpenAIError as e:
-                await message.channel.send("Error contacting the AI. Please try again later.")
-                print(f"OpenAI error: {e}")
-            except Exception as e:
-                await message.channel.send("Unexpected error occurred.")
-                print(f"Unexpected error in AI: {e}")
+        except OpenAIError as e:
+            await message.channel.send("Error contacting the AI. Please try again later.")
+            print(f"OpenAI error: {e}")
+        except Exception as e:
+            await message.channel.send("Unexpected error occurred.")
+            print(f"Unexpected error in AI: {e}")
