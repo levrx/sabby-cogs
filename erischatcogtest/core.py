@@ -158,7 +158,10 @@ class Chat(BaseCog):
         for msg in formatted_query:
             print(f"Role: {msg.get('role')}, Content: '{msg.get('content')}'")
 
-        if not any(msg.get("content") and msg.get("content").strip() for msg in formatted_query):
+        if not any(
+            isinstance(msg.get("content"), str) and msg.get("content").strip()
+            for msg in formatted_query
+        ):
             await channel.send("Sorry, I don't have enough conversation history to respond.")
             return
 
