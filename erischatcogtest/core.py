@@ -167,7 +167,7 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
         await self.initialize_tokens()
         api_key = self.tokens.get("api_key") 
-        model = "gpt-4o"
+        model = self.CablyAIModel
         prompt = await self.config.guild(ctx.guild).prompt()
         
         response = await model_querying.query_text_model(
@@ -241,9 +241,17 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
             await channel.send(page)
 
     @commands.hybrid_command()
-    async def chat(self, ctx: commands.Context, *, args: str = None, attachments: discord.Attachment = None):
-        channel: discord.abc.Messageable = ctx.channel
-        author: discord.Member = ctx.author
+    async def chat(self, ctx: commands.Context, *, args: str = None):
+        author = ctx.author
+        message = ctx.message
+
+        if not args:
+            args = message.content
+            prefix = await ctx.bot.get_valid_prefixes(ctx.guild)
+            for p in prefix:
+                if args.startswith(p + "chat"):
+                    args = args[len(p + "chat"):].strip()
+                    break
 
         if not args:
             await ctx.send("Please provide a message for Sabby to respond to!")
@@ -251,14 +259,14 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
 
         await ctx.defer()
 
-        formatted_query: List[Dict[str, Any]] = [{
-            "role": "user",
-            "content": args
-        }]
+        formatted_query: List[Dict[str, Any]] = [
+            {"role": "system", "content": self.GLOBAL_PROMPT},
+            {"role": "user", "content": args}
+        ]
 
         try:
             await self.initialize_tokens()
-            api_key: str = self.tokens.get("api_key", "")
+            api_key = self.tokens.get("api_key", "")
 
             client = OpenAI(
                 api_key=api_key,
@@ -271,7 +279,10 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
                 max_tokens=300
             )
 
-            model_response: str = response.choices[0].message.content
+            model_response = response.choices[0].message.content.strip()
+            if len(model_response) > 2000:
+                model_response = model_response[:1997] + "..."
+
             await ctx.send(model_response)
 
         except Exception as e:
