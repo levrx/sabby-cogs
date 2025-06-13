@@ -240,50 +240,82 @@ class Chat(commands.Cog):  # Inherit from commands.Cog
         for page in response:
             await channel.send(page)
 
-    @commands.hybrid_command()
-    async def chat(self, ctx: commands.Context, *, args: str = None):
-        author = ctx.author
-        message = ctx.message
-
-        if not args:
-            args = message.content
-            prefix = await ctx.bot.get_valid_prefixes(ctx.guild)
-            for p in prefix:
-                if args.startswith(p + "chat"):
-                    args = args[len(p + "chat"):].strip()
-                    break
-
-        if not args:
-            await ctx.send("Please provide a message for Sabby to respond to!")
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        if message.author == self.bot.user:
             return
 
-        await ctx.defer()
+        if self.bot.user.mentioned_in(message):
+            content_without_mention = message.content
+            for mention in message.mentions:
+                if mention == self.bot.user:
+                    content_without_mention = content_without_mention.replace(mention.mention, "")
+            content_without_mention = content_without_mention.strip()
 
-        formatted_query: List[Dict[str, Any]] = [
-            {"role": "system", "content": self.GLOBAL_PROMPT},
-            {"role": "user", "content": args}
-        ]
+            if not content_without_mention:
+                await message.channel.send("Please provide a message after mentioning me.")
+                return
 
-        try:
-            await self.initialize_tokens()
-            api_key = self.tokens.get("api_key", "")
+            try:
+                prefix = await self.get_prefix(message)
+                _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
+                    prefix, message.channel, message, message.author, extract_full_history=True
+                )
+            except ValueError as e:
+                print("ValueError in extract_chat_history_and_format:", e)
+                return
 
-            client = OpenAI(
-                api_key=api_key,
-                base_url="https://api.zukijourney.com/v1"
-            )
+            print("Formatted query content:")
+            for i, msg in enumerate(formatted_query):
+                role = msg.get("role")
+                content = msg.get("content")
+                print(f"[{i}] Role: {role}, Content: '{content}'")
 
-            response = client.chat.completions.create(
-                model=self.CablyAIModel,
-                messages=formatted_query,
-                max_tokens=300
-            )
+            formatted_query.insert(0, {
+                "role": "system",
+                "content": GLOBAL_PROMPT
+            })
 
-            model_response = response.choices[0].message.content.strip()
-            if len(model_response) > 2000:
-                model_response = model_response[:1997] + "..."
+            openai_formatted_messages = [
+                {
+                    "role": msg["role"],
+                    "content": str(msg["content"]).strip()
+                }
+                for msg in formatted_query
+                if msg.get("role") and msg.get("content") and str(msg["content"]).strip()
+            ]
 
-            await ctx.send(model_response)
+            if not openai_formatted_messages:
+                await message.channel.send("I couldn't find any valid message content to process.")
+                return
 
-        except Exception as e:
-            await ctx.send(f"An error occurred: {e}")
+            try:
+                async with message.channel.typing():
+                    response = await self.client.chat.completions.create(
+                        model=MODEL,
+                        messages=openai_formatted_messages,
+                        max_tokens=1500
+                    )
+
+                if response.choices:
+                    reply = response.choices[0].message.content.strip()
+                    if len(reply) > 2000:
+                        reply = reply[:1997] + "..."
+
+                    await message.channel.send(reply)
+
+
+                    self.history.append({
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": reply}]
+                    })
+                    self.history = self.history[-10:]
+                else:
+                    await message.channel.send("I couldn't generate a response.")
+
+            except OpenAIError as e:
+                await message.channel.send("Error contacting the AI. Please try again later.")
+                print(f"OpenAI error: {e}")
+            except Exception as e:
+                await message.channel.send("Unexpected error occurred.")
+                print(f"Unexpected error in AI: {e}")
