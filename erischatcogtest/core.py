@@ -150,16 +150,17 @@ class Chat(BaseCog):
 
         try:
             _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-                prefix,
-                channel,
-                message,
-                author,
-                extract_full_history=True,
-                whois_dict=self.whois_dictionary,
+            prefix,
+            channel,
+            message,
+            author,
+            extract_full_history=True,
+            whois_dict=self.whois_dictionary,
             )
         except ValueError as e:
             print(f"ValueError in extract_chat_history_and_format: {e}")
             formatted_query = []
+            user_names = {}  # fallback value so it's always defined
 
         # If there's no usable history, just use the current message
         if not any(
