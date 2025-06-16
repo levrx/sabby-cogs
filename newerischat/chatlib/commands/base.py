@@ -29,7 +29,7 @@ DEFAULT_GUILD_SETTINGS = {
         "directed at you are answered completely regardless of content.\n"
     ),
     "endpoint": None,
-    "model": "gpt-4o",
+    "model": "gemini-1.5-pro-latest",
 }
 
 
