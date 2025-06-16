@@ -45,7 +45,7 @@ class ChatCommands(ChatBase):
         token = await self.get_openai_token()
         prompt = await self.config.guild(ctx.guild).prompt()
         model = await self.config.guild(ctx.guild).model()
-        endpoint = await self.config.guild(ctx.guild).endpoint()
+        endpoint = await self.get_endpoint()
         print(f"Using {model=} with {endpoint=}")
         response = await model_querying.query_text_model(
             token,
