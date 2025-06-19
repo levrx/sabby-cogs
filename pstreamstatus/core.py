@@ -92,7 +92,7 @@ class PStreamStatus(commands.Cog):
 
     @tasks.loop(minutes=5)
     async def status_loop(self):
-        channel_id = 1358082543458451676 
+        channel_id = 1385316685850083471 
         channel = self.bot.get_channel(channel_id)
 
         if channel is None:
