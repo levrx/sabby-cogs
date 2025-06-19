@@ -44,14 +44,15 @@ class PStreamStatus(commands.Cog):
                     # Normalize the content by removing HTML tags and lowering case
                     clean_text = re.sub(r"<[^>]+>", "", text).strip().lower()
 
-                    # Check for the known failure message
+                    # Check for the known failure message first
                     if "no available server" in clean_text:
                         return "Down", None
 
-                    # If status is 200 and no failure message
+                    # If the specific failure message is NOT present, then check HTTP status
                     if resp.status == 200:
                         return "Operational", None
-
+                    
+                    # If status is not 200 and no specific failure message, it's degraded
                     return "Degraded", None
 
         except Exception:
