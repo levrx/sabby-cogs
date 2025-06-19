@@ -42,18 +42,18 @@ class PStreamStatus(commands.Cog):
                     text = await resp.text()
 
                     # Normalize the content by removing HTML tags and lowering case
-                    clean_text = re.sub(r"<[^>]+>", "", text).strip().lower()
+                    clean_text = re.sub(r"<[^>]+>", "", text).strip().lower() # i used this but now i dont
 
                     # Check for the known failure message first
-                    if "no available server" in clean_text:
+                     if resp.status == 403: # no available server
                         return "Down", None
 
                     # If the specific failure message is NOT present, then check HTTP status
-                    if resp.status == 200:
+                    if resp.status == 200: # weblate is up
                         return "Operational", None
                     
-                    # If status is not 200 and no specific failure message, it's degraded
-                    return "Down", None
+                    # If status is not 200 and no specific failure message, it's down ig
+                    return "Down", None # if not 403 or 200, i guess its down
 
         except Exception:
             return "Down", None
