@@ -11,11 +11,11 @@ CLOUDFLARE_STATUS_URL = "https://www.cloudflarestatus.com/api/v2/components.json
 BACKEND_HOST = "server.fifthwit.net"
 WEBLATE_HOST = "weblate.pstream.org"
 FEED_REGIONS = [
-    ("Asia", "fed-api-asia.pstream.org/status/data"),
-    ("East", "fed-api-east.pstream.org/status/data"),
-    ("Europe", "fed-api-europe.pstream.org/status/data"),
-    ("South", "fed-api-south.pstream.org/status/data"),
-    ("West", "fed-api-west.pstream.org/status/data"),
+    ("Asia", "https://fed-api-asia.pstream.org/status/data"),
+    ("East", "https://fed-api-east.pstream.org/status/data"),
+    ("Europe", "https://fed-api-europe.pstream.org/status/data"),
+    ("South", "https://fed-api-south.pstream.org/status/data"),
+    ("West", "https://fed-api-west.pstream.org/status/data"),
 ]
 
 class PStreamStatus(commands.Cog):
@@ -24,7 +24,7 @@ class PStreamStatus(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.last_message = None  # (channel_id, message_id)
-        self.channel_id = 1385316685850083471  # Default channel
+        self.channel_obj = None  # discord.TextChannel
         self.status_loop.start()
 
     def cog_unload(self):
@@ -84,7 +84,7 @@ class PStreamStatus(commands.Cog):
         async with aiohttp.ClientSession() as session:
             for name, url in FEED_REGIONS:
                 try:
-                    async with session.get(f"https://{url}", timeout=5) as resp:
+                    async with session.get(url, timeout=5) as resp:
                         data = await resp.json()
                         results[name] = data
                 except Exception:
@@ -93,15 +93,17 @@ class PStreamStatus(commands.Cog):
 
     def create_embed(self, cf_status, backend_status, weblate_status, feed_statuses):
         embed = discord.Embed(
-            title="Platform Status",
-            color=discord.Color.blue()
+            title="🌐 Platform Status",
+            color=discord.Color.blurple()
         )
 
+        # Cloudflare
         for name in ["Pages", "Access", "API"]:
             status = cf_status.get(name, "Unknown")
             emoji = "🟢" if status == "operational" else "🔴"
             embed.add_field(name=f"Cloudflare {name}", value=f"{emoji} {status.title()}", inline=True)
 
+        # Backend
         b_status, b_ping = backend_status
         b_emoji = "🟢" if b_status == "Operational" else "🟠" if b_status == "Degraded" else "🔴"
         backend_display = f"{b_emoji} {b_status}"
@@ -109,13 +111,18 @@ class PStreamStatus(commands.Cog):
             backend_display += f" ({b_ping:.1f} ms)"
         embed.add_field(name="Backend", value=backend_display, inline=True)
 
-        w_status, w_ping = weblate_status
+        # Weblate
+        w_status, _ = weblate_status
         w_emoji = "🟢" if w_status == "Operational" else "🟠" if w_status == "Degraded" else "🔴"
-        weblate_display = f"{w_emoji} {w_status}"
-        embed.add_field(name="Weblate", value=weblate_display, inline=True)
+        embed.add_field(name="Weblate", value=f"{w_emoji} {w_status}", inline=True)
 
+        # Feeds
         for region, data in feed_statuses.items():
-            val = f"❌ Failed: {data['failed']}\n✅ Succeeded: {data['succeeded']}\n📊 Total: {data['total']}"
+            val = (
+                f"❌ **Failed**: `{data['failed']}`\n"
+                f"✅ **Succeeded**: `{data['succeeded']}`\n"
+                f"📊 **Total**: `{data['total']}`"
+            )
             embed.add_field(name=f"Feed - {region}", value=val, inline=True)
 
         embed.set_footer(text=f"Last Checked: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
@@ -123,10 +130,12 @@ class PStreamStatus(commands.Cog):
 
     @tasks.loop(minutes=5)
     async def status_loop(self):
-        channel = self.bot.get_channel(self.channel_id)
-        if channel is None:
+        if not self.channel_obj:
             return
 
+        await self.send_or_update_status()
+
+    async def send_or_update_status(self):
         cf_status = await self.get_cloudflare_status()
         backend_status = await self.ping_host(BACKEND_HOST)
         weblate_status = await self.check_weblate_status()
@@ -135,36 +144,36 @@ class PStreamStatus(commands.Cog):
 
         if self.last_message:
             try:
-                old_channel = self.bot.get_channel(self.last_message[0])
-                old_msg = await old_channel.fetch_message(self.last_message[1])
-                await old_msg.delete()
+                old_msg = await self.channel_obj.fetch_message(self.last_message[1])
+                await old_msg.edit(embed=embed)
+                return
             except Exception:
                 pass
 
-        msg = await channel.send(embed=embed)
-        self.last_message = (channel.id, msg.id)
+        msg = await self.channel_obj.send(embed=embed)
+        self.last_message = (self.channel_obj.id, msg.id)
 
     @commands.group()
     async def pstreamstatus(self, ctx):
-        """Status command group."""
+        """PStreamStatus commands."""
         if ctx.invoked_subcommand is None:
-            await ctx.send("Use `pstreamstatus refresh` or `pstreamstatus channel <channel_id>`.")
+            await ctx.send_help()
 
-    @pstreamstatus.command()
-    async def refresh(self, ctx):
-        """Manually trigger a one-time status check and send embed."""
-        cf_status = await self.get_cloudflare_status()
-        backend_status = await self.ping_host(BACKEND_HOST)
-        weblate_status = await self.check_weblate_status()
-        feed_statuses = await self.get_feed_statuses()
-        embed = self.create_embed(cf_status, backend_status, weblate_status, feed_statuses)
-        await ctx.send(embed=embed)
+    @pstreamstatus.command(name="refresh")
+    async def refresh_status(self, ctx):
+        """Manually refresh and update the status message in the set channel."""
+        if not self.channel_obj:
+            await ctx.send("❌ You must set a channel first using `-pstreamstatus channel #channel-name`.")
+            return
+        await self.send_or_update_status()
+        await ctx.tick()
 
-    @pstreamstatus.command()
-    async def channel(self, ctx, new_channel_id: int):
-        """Set the channel ID to post automatic updates."""
-        self.channel_id = new_channel_id
-        await ctx.send(f"✅ Channel ID set to `{new_channel_id}` for future updates.")
+    @pstreamstatus.command(name="channel")
+    async def set_channel(self, ctx, channel: discord.TextChannel):
+        """Set the status output channel."""
+        self.channel_obj = channel
+        await ctx.send(f"✅ Status messages will now be posted and updated in {channel.mention}.")
+
 
 def setup(bot):
     bot.add_cog(PStreamStatus(bot))
