@@ -103,8 +103,8 @@ class PStreamStatus(commands.Cog):
             return debug_info
         return results
 
-    def create_embed(self, cf_status, backend_status, weblate_status, feed_statuses):
-        embed = discord.Embed(
+    def create_embeds(self, cf_status, backend_status, weblate_status, feed_statuses):
+        embed_main = discord.Embed(
             title="🌐 Platform Status",
             color=discord.Color.blurple()
         )
@@ -112,29 +112,33 @@ class PStreamStatus(commands.Cog):
         for name in ["Pages", "Access", "API"]:
             status = cf_status.get(name, "Unknown")
             emoji = "🟢" if status == "operational" else "🔴"
-            embed.add_field(name=f"Cloudflare {name}", value=f"{emoji} {status.title()}", inline=True)
+            embed_main.add_field(name=f"Cloudflare {name}", value=f"{emoji} {status.title()}", inline=True)
 
         b_status, b_ping = backend_status
         b_emoji = "🟢" if b_status == "Operational" else "🟠" if b_status == "Degraded" else "🔴"
         backend_display = f"{b_emoji} {b_status}"
         if b_ping:
             backend_display += f" ({b_ping:.1f} ms)"
-        embed.add_field(name="Backend", value=backend_display, inline=True)
+        embed_main.add_field(name="Backend", value=backend_display, inline=True)
 
         w_status, _ = weblate_status
         w_emoji = "🟢" if w_status == "Operational" else "🟠" if w_status == "Degraded" else "🔴"
-        embed.add_field(name="Weblate", value=f"{w_emoji} {w_status}", inline=True)
+        embed_main.add_field(name="Weblate", value=f"{w_emoji} {w_status}", inline=True)
 
+        embed_feeds = discord.Embed(
+            title="Feed Statuses",
+            color=discord.Color.green()
+        )
         for region, data in feed_statuses.items():
             val = (
                 f"❌ **Failed**: `{data['failed']}`\n"
                 f"✅ **Succeeded**: `{data['succeeded']}`\n"
                 f"📊 **Total**: `{data['total']}`"
             )
-            embed.add_field(name=f"Feed - {region}", value=val, inline=True)
+            embed_feeds.add_field(name=f"Feed - {region}", value=val, inline=True)
 
-        embed.set_footer(text=f"Last Checked: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
-        return embed
+        embed_main.set_footer(text=f"Last Checked: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
+        return embed_main, embed_feeds
 
     @tasks.loop(minutes=5)
     async def status_loop(self):
@@ -147,18 +151,22 @@ class PStreamStatus(commands.Cog):
         backend_status = await self.ping_host(BACKEND_HOST)
         weblate_status = await self.check_weblate_status()
         feed_statuses = await self.get_feed_statuses()
-        embed = self.create_embed(cf_status, backend_status, weblate_status, feed_statuses)
+        embed_main, embed_feeds = self.create_embeds(cf_status, backend_status, weblate_status, feed_statuses)
 
+        # Send or update both embeds
         if self.last_message:
             try:
-                old_msg = await self.channel_obj.fetch_message(self.last_message[1])
-                await old_msg.edit(embed=embed)
+                old_msg_main = await self.channel_obj.fetch_message(self.last_message[1])
+                old_msg_feeds = await self.channel_obj.fetch_message(self.last_message[2])
+                await old_msg_main.edit(embed=embed_main)
+                await old_msg_feeds.edit(embed=embed_feeds)
                 return
             except Exception:
                 pass
 
-        msg = await self.channel_obj.send(embed=embed)
-        self.last_message = (self.channel_obj.id, msg.id)
+        msg_main = await self.channel_obj.send(embed=embed_main)
+        msg_feeds = await self.channel_obj.send(embed=embed_feeds)
+        self.last_message = (self.channel_obj.id, msg_main.id, msg_feeds.id)
 
     @commands.group(invoke_without_command=True)
     async def pstreamstatus(self, ctx):
@@ -182,12 +190,43 @@ class PStreamStatus(commands.Cog):
 
     @pstreamstatus.command(name="debugfeeds")
     async def debug_feeds(self, ctx):
-        """Debug raw output from feed endpoints."""
+        """Show status and raw JSON from each feed API."""
         raw = await self.get_feed_statuses(raw=True)
-        msg = ""
+        statuses = []
+        json_embeds = []
+
         for region, data in raw.items():
-            msg += f"**{region}**\n```json\n{json.dumps(data, indent=2)[:1000]}\n```\n"
-        await ctx.send(msg or "No debug info available.")
+            if isinstance(data, dict):
+                failed = data.get("failed", "N/A")
+                succeeded = data.get("succeeded", "N/A")
+                total = data.get("total", "N/A")
+                statuses.append(
+                    f"**{region}**\n❌ Failed: `{failed}`\n✅ Succeeded: `{succeeded}`\n📊 Total: `{total}`"
+                )
+                json_str = json.dumps(data, indent=2)
+            else:
+                statuses.append(f"**{region}**\nCould not parse JSON.")
+                json_str = str(data)
+            if len(json_str) > 1000:
+                json_str = json_str[:1000] + "\n...truncated..."
+            embed = discord.Embed(
+                title=f"Raw JSON for {region}",
+                description=f"```json\n{json_str}\n```",
+                color=discord.Color.orange()
+            )
+            json_embeds.append(embed)
+
+        # Send API status embed
+        status_embed = discord.Embed(
+            title="Feed API Status",
+            description="\n\n".join(statuses),
+            color=discord.Color.green()
+        )
+        await ctx.send(embed=status_embed)
+
+        # Send each JSON embed separately to avoid hitting limits
+        for embed in json_embeds:
+            await ctx.send(embed=embed)
 
 
 def setup(bot):
