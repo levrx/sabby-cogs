@@ -10,13 +10,21 @@ import re
 CLOUDFLARE_STATUS_URL = "https://www.cloudflarestatus.com/api/v2/components.json"
 BACKEND_HOST = "server.fifthwit.net"
 WEBLATE_HOST = "weblate.pstream.org"
+FEED_REGIONS = [
+    ("Asia", "fed-api-asia.pstream.org/status/data"),
+    ("East", "fed-api-east.pstream.org/status/data"),
+    ("Europe", "fed-api-europe.pstream.org/status/data"),
+    ("South", "fed-api-south.pstream.org/status/data"),
+    ("West", "fed-api-west.pstream.org/status/data"),
+]
 
 class PStreamStatus(commands.Cog):
-    """Check Cloudflare and custom site statuses periodically."""
+    """Check Cloudflare, backend, weblate, and feed statuses periodically."""
 
     def __init__(self, bot):
         self.bot = bot
         self.last_message = None  # (channel_id, message_id)
+        self.channel_id = 1385316685850083471  # Default channel
         self.status_loop.start()
 
     def cog_unload(self):
@@ -39,22 +47,11 @@ class PStreamStatus(commands.Cog):
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"https://{WEBLATE_HOST}", timeout=5) as resp:
-                    text = await resp.text()
-
-                    # Normalize the content by removing HTML tags and lowering case
-                    clean_text = re.sub(r"<[^>]+>", "", text).strip().lower() # i used this but now i dont
-
-                    # Check for the known failure message first
-                    if resp.status == 403: # no available server
+                    if resp.status == 403:
                         return "Down", None
-
-                    # If the specific failure message is NOT present, then check HTTP status
-                    if resp.status == 200: # weblate is up
+                    if resp.status == 200:
                         return "Operational", None
-                    
-                    # If status is not 200 and no specific failure message, it's down ig
-                    return "Down", None # if not 403 or 200, i guess its down
-
+                    return "Down", None
         except Exception:
             return "Down", None
 
@@ -82,19 +79,29 @@ class PStreamStatus(commands.Cog):
         except Exception:
             return "Down", None
 
-    def create_embed(self, cf_status, backend_status, weblate_status):
+    async def get_feed_statuses(self):
+        results = {}
+        async with aiohttp.ClientSession() as session:
+            for name, url in FEED_REGIONS:
+                try:
+                    async with session.get(f"https://{url}", timeout=5) as resp:
+                        data = await resp.json()
+                        results[name] = data
+                except Exception:
+                    results[name] = {"failed": "N/A", "succeeded": "N/A", "total": "N/A"}
+        return results
+
+    def create_embed(self, cf_status, backend_status, weblate_status, feed_statuses):
         embed = discord.Embed(
             title="Platform Status",
             color=discord.Color.blue()
         )
 
-        # Cloudflare
         for name in ["Pages", "Access", "API"]:
             status = cf_status.get(name, "Unknown")
             emoji = "🟢" if status == "operational" else "🔴"
             embed.add_field(name=f"Cloudflare {name}", value=f"{emoji} {status.title()}", inline=True)
 
-        # Backend
         b_status, b_ping = backend_status
         b_emoji = "🟢" if b_status == "Operational" else "🟠" if b_status == "Degraded" else "🔴"
         backend_display = f"{b_emoji} {b_status}"
@@ -102,53 +109,62 @@ class PStreamStatus(commands.Cog):
             backend_display += f" ({b_ping:.1f} ms)"
         embed.add_field(name="Backend", value=backend_display, inline=True)
 
-        # Weblate
         w_status, w_ping = weblate_status
         w_emoji = "🟢" if w_status == "Operational" else "🟠" if w_status == "Degraded" else "🔴"
         weblate_display = f"{w_emoji} {w_status}"
-        if w_ping:
-            weblate_display += f" ({w_ping:.1f} ms)"
         embed.add_field(name="Weblate", value=weblate_display, inline=True)
 
-        # Last checked
+        for region, data in feed_statuses.items():
+            val = f"❌ Failed: {data['failed']}\n✅ Succeeded: {data['succeeded']}\n📊 Total: {data['total']}"
+            embed.add_field(name=f"Feed - {region}", value=val, inline=True)
+
         embed.set_footer(text=f"Last Checked: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
         return embed
 
     @tasks.loop(minutes=5)
     async def status_loop(self):
-        channel_id = 1385316685850083471 
-        channel = self.bot.get_channel(channel_id)
-
+        channel = self.bot.get_channel(self.channel_id)
         if channel is None:
             return
 
-        # Fetch statuses
         cf_status = await self.get_cloudflare_status()
         backend_status = await self.ping_host(BACKEND_HOST)
         weblate_status = await self.check_weblate_status()
-        embed = self.create_embed(cf_status, backend_status, weblate_status)
+        feed_statuses = await self.get_feed_statuses()
+        embed = self.create_embed(cf_status, backend_status, weblate_status, feed_statuses)
 
-        # Delete previous message
         if self.last_message:
             try:
                 old_channel = self.bot.get_channel(self.last_message[0])
                 old_msg = await old_channel.fetch_message(self.last_message[1])
                 await old_msg.delete()
             except Exception:
-                pass  # Ignore if message no longer exists
+                pass
 
-        # Send new message
         msg = await channel.send(embed=embed)
         self.last_message = (channel.id, msg.id)
 
-    @commands.command()
+    @commands.group()
     async def pstreamstatus(self, ctx):
+        """Status command group."""
+        if ctx.invoked_subcommand is None:
+            await ctx.send("Use `pstreamstatus refresh` or `pstreamstatus channel <channel_id>`.")
+
+    @pstreamstatus.command()
+    async def refresh(self, ctx):
         """Manually trigger a one-time status check and send embed."""
         cf_status = await self.get_cloudflare_status()
         backend_status = await self.ping_host(BACKEND_HOST)
         weblate_status = await self.check_weblate_status()
-        embed = self.create_embed(cf_status, backend_status, weblate_status)
+        feed_statuses = await self.get_feed_statuses()
+        embed = self.create_embed(cf_status, backend_status, weblate_status, feed_statuses)
         await ctx.send(embed=embed)
+
+    @pstreamstatus.command()
+    async def channel(self, ctx, new_channel_id: int):
+        """Set the channel ID to post automatic updates."""
+        self.channel_id = new_channel_id
+        await ctx.send(f"✅ Channel ID set to `{new_channel_id}` for future updates.")
 
 def setup(bot):
     bot.add_cog(PStreamStatus(bot))
