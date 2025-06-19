@@ -188,7 +188,8 @@ class PStreamStatus(commands.Cog):
         for region, data in raw.items():
             msg += f"**{region}**
 ```json
-{json.dumps(data, indent=2)[:1000]}```
+{json.dumps(data, indent=2)[:1000]}
+```
 "
         await ctx.send(msg or "No debug info available.")
 
