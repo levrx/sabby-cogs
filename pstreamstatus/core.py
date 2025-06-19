@@ -6,6 +6,7 @@ import asyncio
 import platform
 from datetime import datetime
 import re
+import json
 
 CLOUDFLARE_STATUS_URL = "https://www.cloudflarestatus.com/api/v2/components.json"
 BACKEND_HOST = "server.fifthwit.net"
@@ -79,16 +80,27 @@ class PStreamStatus(commands.Cog):
         except Exception:
             return "Down", None
 
-    async def get_feed_statuses(self):
+    async def get_feed_statuses(self, raw=False):
         results = {}
+        debug_info = {}
         async with aiohttp.ClientSession() as session:
             for name, url in FEED_REGIONS:
                 try:
                     async with session.get(url, timeout=5) as resp:
-                        data = await resp.json()
-                        results[name] = data
-                except Exception:
+                        text = await resp.text()
+                        try:
+                            data = json.loads(text)
+                            results[name] = data
+                            debug_info[name] = data
+                        except json.JSONDecodeError:
+                            results[name] = {"failed": "N/A", "succeeded": "N/A", "total": "N/A"}
+                            debug_info[name] = text
+                except Exception as e:
                     results[name] = {"failed": "N/A", "succeeded": "N/A", "total": "N/A"}
+                    debug_info[name] = str(e)
+
+        if raw:
+            return debug_info
         return results
 
     def create_embed(self, cf_status, backend_status, weblate_status, feed_statuses):
@@ -97,13 +109,11 @@ class PStreamStatus(commands.Cog):
             color=discord.Color.blurple()
         )
 
-        # Cloudflare
         for name in ["Pages", "Access", "API"]:
             status = cf_status.get(name, "Unknown")
             emoji = "🟢" if status == "operational" else "🔴"
             embed.add_field(name=f"Cloudflare {name}", value=f"{emoji} {status.title()}", inline=True)
 
-        # Backend
         b_status, b_ping = backend_status
         b_emoji = "🟢" if b_status == "Operational" else "🟠" if b_status == "Degraded" else "🔴"
         backend_display = f"{b_emoji} {b_status}"
@@ -111,12 +121,10 @@ class PStreamStatus(commands.Cog):
             backend_display += f" ({b_ping:.1f} ms)"
         embed.add_field(name="Backend", value=backend_display, inline=True)
 
-        # Weblate
         w_status, _ = weblate_status
         w_emoji = "🟢" if w_status == "Operational" else "🟠" if w_status == "Degraded" else "🔴"
         embed.add_field(name="Weblate", value=f"{w_emoji} {w_status}", inline=True)
 
-        # Feeds
         for region, data in feed_statuses.items():
             val = (
                 f"❌ **Failed**: `{data['failed']}`\n"
@@ -132,7 +140,6 @@ class PStreamStatus(commands.Cog):
     async def status_loop(self):
         if not self.channel_obj:
             return
-
         await self.send_or_update_status()
 
     async def send_or_update_status(self):
@@ -153,11 +160,10 @@ class PStreamStatus(commands.Cog):
         msg = await self.channel_obj.send(embed=embed)
         self.last_message = (self.channel_obj.id, msg.id)
 
-    @commands.group()
+    @commands.group(invoke_without_command=True)
     async def pstreamstatus(self, ctx):
         """PStreamStatus commands."""
-        if ctx.invoked_subcommand is None:
-            await ctx.send_help()
+        await ctx.send_help()
 
     @pstreamstatus.command(name="refresh")
     async def refresh_status(self, ctx):
@@ -173,6 +179,16 @@ class PStreamStatus(commands.Cog):
         """Set the status output channel."""
         self.channel_obj = channel
         await ctx.send(f"✅ Status messages will now be posted and updated in {channel.mention}.")
+
+    @pstreamstatus.command(name="debugfeeds")
+    async def debug_feeds(self, ctx):
+        """Debug raw output from feed endpoints."""
+        raw = await self.get_feed_statuses(raw=True)
+        msg = ""
+        for region, data in raw.items():
+            msg += f"**{region}**\n```
+{str(data)[:1000]}```\n"
+        await ctx.send(msg or "No debug info available.")
 
 
 def setup(bot):
