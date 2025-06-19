@@ -5,6 +5,7 @@ import aiohttp
 import asyncio
 import platform
 from datetime import datetime
+import re
 
 CLOUDFLARE_STATUS_URL = "https://www.cloudflarestatus.com/api/v2/components.json"
 BACKEND_HOST = "server.fifthwit.net"
@@ -40,20 +41,21 @@ class PStreamStatus(commands.Cog):
                 async with session.get(f"http://{WEBLATE_HOST}", timeout=5) as resp:
                     text = await resp.text()
 
-                    # Check content first
-                    if "no available server" in text.lower():
+                # Normalize the content by removing HTML tags and lowering case
+                    clean_text = re.sub(r"<[^>]+>", "", text).strip().lower()
+
+                # Check for the known failure message
+                    if "no available server" in clean_text:
                         return "Down", None
 
-                    # If status is 200 and no error content found
+                # If status is 200 and no failure message
                     if resp.status == 200:
                         return "Operational", None
 
-                    # If not 200 but no known down message, consider degraded
                     return "Degraded", None
 
-        except Exception:
-            return "Down", None
-
+    except Exception:
+        return "Down", None
     async def ping_host(self, host):
         count_flag = "-n" if platform.system().lower() == "windows" else "-c"
         try:
