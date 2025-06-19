@@ -7,8 +7,8 @@ import platform
 from datetime import datetime
 
 CLOUDFLARE_STATUS_URL = "https://www.cloudflarestatus.com/api/v2/components.json"
-BACKEND_HOST = "https://server.fifthwit.net"
-WEBLATE_HOST = "https://weblate.pstream.org"
+BACKEND_HOST = "server.fifthwit.net"
+WEBLATE_HOST = "weblate.pstream.org"
 
 class PStreamStatus(commands.Cog):
     """Check Cloudflare and custom site statuses periodically."""
