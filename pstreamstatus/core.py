@@ -68,7 +68,7 @@ class PStreamStatus(commands.Cog):
         for name in ["Pages", "Access", "API"]:
             status = cf_status.get(name, "Unknown")
             emoji = "🟢" if status == "operational" else "🔴"
-            embed.add_field(name=f"Cloudflare {name}", value=f"{emoji} {status.title()}", inline=False)
+            embed.add_field(name=f"Cloudflare {name}", value=f"{emoji} {status.title()}", inline=True)
 
         # Backend
         b_status, b_ping = backend_status
@@ -76,7 +76,7 @@ class PStreamStatus(commands.Cog):
         backend_display = f"{b_emoji} {b_status}"
         if b_ping:
             backend_display += f" ({b_ping:.1f} ms)"
-        embed.add_field(name="Backend", value=backend_display, inline=False)
+        embed.add_field(name="Backend", value=backend_display, inline=True)
 
         # Weblate
         w_status, w_ping = weblate_status
@@ -84,7 +84,7 @@ class PStreamStatus(commands.Cog):
         weblate_display = f"{w_emoji} {w_status}"
         if w_ping:
             weblate_display += f" ({w_ping:.1f} ms)"
-        embed.add_field(name="Weblate", value=weblate_display, inline=False)
+        embed.add_field(name="Weblate", value=weblate_display, inline=True)
 
         # Last checked
         embed.set_footer(text=f"Last Checked: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
