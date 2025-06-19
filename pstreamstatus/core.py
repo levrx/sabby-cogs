@@ -39,12 +39,18 @@ class PStreamStatus(commands.Cog):
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"http://{WEBLATE_HOST}", timeout=5) as resp:
                     text = await resp.text()
+
+                    # Check content first
                     if "no available server" in text.lower():
                         return "Down", None
-                    elif resp.status == 200:
+
+                    # If status is 200 and no error content found
+                    if resp.status == 200:
                         return "Operational", None
-                    else:
-                        return "Degraded", None
+
+                    # If not 200 but no known down message, consider degraded
+                    return "Degraded", None
+
         except Exception:
             return "Down", None
 
