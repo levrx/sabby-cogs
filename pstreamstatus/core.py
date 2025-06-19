@@ -34,6 +34,20 @@ class PStreamStatus(commands.Cog):
                         status[name] = comp.get("status")
                 return status
 
+    async def check_weblate_status(self):
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"http://{WEBLATE_HOST}", timeout=5) as resp:
+                    text = await resp.text()
+                    if "no available server" in text.lower():
+                        return "Down", None
+                    elif resp.status == 200:
+                        return "Operational", None
+                    else:
+                        return "Degraded", None
+        except Exception:
+            return "Down", None
+
     async def ping_host(self, host):
         count_flag = "-n" if platform.system().lower() == "windows" else "-c"
         try:
@@ -101,7 +115,7 @@ class PStreamStatus(commands.Cog):
         # Fetch statuses
         cf_status = await self.get_cloudflare_status()
         backend_status = await self.ping_host(BACKEND_HOST)
-        weblate_status = await self.ping_host(WEBLATE_HOST)
+        weblate_status = await self.check_weblate_status()
         embed = self.create_embed(cf_status, backend_status, weblate_status)
 
         # Delete previous message
@@ -122,7 +136,7 @@ class PStreamStatus(commands.Cog):
         """Manually trigger a one-time status check and send embed."""
         cf_status = await self.get_cloudflare_status()
         backend_status = await self.ping_host(BACKEND_HOST)
-        weblate_status = await self.ping_host(WEBLATE_HOST)
+        weblate_status = await self.check_weblate_status()
         embed = self.create_embed(cf_status, backend_status, weblate_status)
         await ctx.send(embed=embed)
 
