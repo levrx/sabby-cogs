@@ -53,7 +53,7 @@ class PStreamStatus(commands.Cog):
                         return "Operational", None
                     
                     # If status is not 200 and no specific failure message, it's degraded
-                    return "Degraded", None
+                    return "Down", None
 
         except Exception:
             return "Down", None
