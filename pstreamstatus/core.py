@@ -186,7 +186,9 @@ class PStreamStatus(commands.Cog):
         raw = await self.get_feed_statuses(raw=True)
         msg = ""
         for region, data in raw.items():
-            msg += f"**{region}**\n```
+            msg += f"**{region}**
+```json
+
 {str(data)[:1000]}```\n"
         await ctx.send(msg or "No debug info available.")
 
