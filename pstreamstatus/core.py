@@ -45,7 +45,7 @@ class PStreamStatus(commands.Cog):
                     clean_text = re.sub(r"<[^>]+>", "", text).strip().lower() # i used this but now i dont
 
                     # Check for the known failure message first
-                     if resp.status == 403: # no available server
+                    if resp.status == 403: # no available server
                         return "Down", None
 
                     # If the specific failure message is NOT present, then check HTTP status
