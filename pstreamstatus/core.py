@@ -7,6 +7,7 @@ import platform
 from datetime import datetime
 import re
 import json
+import io
 
 CLOUDFLARE_STATUS_URL = "https://www.cloudflarestatus.com/api/v2/components.json"
 BACKEND_HOST = "server.fifthwit.net"
@@ -185,45 +186,35 @@ class PStreamStatus(commands.Cog):
 
     @pstreamstatus.command(name="debugfeeds")
     async def debug_feeds(self, ctx):
-        """Show status and raw JSON from each feed API."""
+        """Show status and raw response from each feed API as a file."""
         raw = await self.get_feed_statuses(raw=True)
         statuses = []
-        json_embeds = []
 
         for region, data in raw.items():
-            # Try to parse as JSON, else show as string
-            if isinstance(data, dict):
-                failed = data.get("failed", "N/A")
-                succeeded = data.get("succeeded", "N/A")
-                total = data.get("total", "N/A")
-                statuses.append(f"**{region}**\n❌ Failed: `{failed}`\n✅ Succeeded: `{succeeded}`\n📊 Total: `{total}`")
-                json_str = json.dumps(data, indent=2)
-            else:
-                statuses.append(f"**{region}**\nCould not parse JSON.")
-                json_str = str(data)
-
-            # Truncate JSON if too long for Discord
-            if len(json_str) > 1000:
-                json_str = json_str[:1000] + "\n...truncated..."
-
-            embed = discord.Embed(
-                title=f"Raw JSON for {region}",
-                description=f"```json\n{json_str}\n```",
-                color=discord.Color.orange()
+            # If data is not a string, convert it
+            if not isinstance(data, str):
+                data = str(data)
+            # Prepare a summary for the status embed
+            total = re.search(r"Total\s*Request(?:s)?:?\s*(\d+)", data, re.I)
+            succeeded = re.search(r"Succeeded:?\s*(\d+)", data, re.I)
+            failed = re.search(r"Failed:?\s*(\d+)", data, re.I)
+            statuses.append(
+                f"**{region}**\n"
+                f"❌ Failed: `{failed.group(1) if failed else 'N/A'}`\n"
+                f"✅ Succeeded: `{succeeded.group(1) if succeeded else 'N/A'}`\n"
+                f"📊 Total: `{total.group(1) if total else 'N/A'}`"
             )
-            json_embeds.append(embed)
+            # Send the full raw response as a file
+            file = discord.File(fp=io.BytesIO(data.encode()), filename=f"{region}_feed_status.txt")
+            await ctx.send(f"Raw response for **{region}**:", file=file)
 
-        # Send API status embed
+        # Send a summary embed
         status_embed = discord.Embed(
             title="Feed API Status",
             description="\n\n".join(statuses),
             color=discord.Color.green()
         )
         await ctx.send(embed=status_embed)
-
-        # Send each JSON embed separately to avoid hitting limits
-        for embed in json_embeds:
-            await ctx.send(embed=embed)
 
 
 def setup(bot):
