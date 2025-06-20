@@ -27,6 +27,7 @@ class PStreamStatus(commands.Cog):
         self.bot = bot
         self.last_message = None  # (channel_id, message_id)
         self.channel_obj = None  # discord.TextChannel
+        self.show_fedapi = True  # Add this line
         self.status_loop.start()
 
     def cog_unload(self):
@@ -129,13 +130,14 @@ class PStreamStatus(commands.Cog):
         w_emoji = "🟢" if w_status == "Operational" else "🟠" if w_status == "Degraded" else "🔴"
         embed.add_field(name="Weblate", value=f"{w_emoji} {w_status}", inline=True)
 
-        for region, data in feed_statuses.items():
-            val = (
-                f"❌ **Failed**: `{data['failed']}`\n"
-                f"✅ **Succeeded**: `{data['succeeded']}`\n"
-                f"📊 **Total**: `{data['total']}`"
-            )
-            embed.add_field(name=f"Feed - {region}", value=val, inline=True)
+        if self.show_fedapi:
+            for region, data in feed_statuses.items():
+                val = (
+                    f"❌ **Failed**: `{data['failed']}`\n"
+                    f"✅ **Succeeded**: `{data['succeeded']}`\n"
+                    f"📊 **Total**: `{data['total']}`"
+                )
+                embed.add_field(name=f"Feed - {region}", value=val, inline=True)
 
         embed.set_footer(text=f"Last Checked: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
         return embed
@@ -247,6 +249,20 @@ class PStreamStatus(commands.Cog):
         # Send the full raw response as a file
         file = discord.File(fp=io.BytesIO(data.encode()), filename=f"{region}_feed_status.txt")
         await ctx.send(summary, file=file)
+
+    @pstreamstatus.command(name="disablefedapi")
+    async def disable_fedapi(self, ctx):
+        """Disable the Fed-Api Status embed."""
+        self.show_fedapi = False
+        await ctx.send("🛑 Fed-Api Status embed is now **disabled**.")
+        await self.send_or_update_status()
+
+    @pstreamstatus.command(name="enablefedapi")
+    async def enable_fedapi(self, ctx):
+        """Enable the Fed-Api Status embed."""
+        self.show_fedapi = True
+        await ctx.send("✅ Fed-Api Status embed is now **enabled**.")
+        await self.send_or_update_status()
 
 
 def setup(bot):
