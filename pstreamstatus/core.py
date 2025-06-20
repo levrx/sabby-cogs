@@ -26,6 +26,7 @@ class PStreamStatus(commands.Cog):
         self.bot = bot
         self.last_message = None  # (channel_id, message_id)
         self.channel_obj = None  # discord.TextChannel
+        self.show_fedapi = True  # Controls if Fed-Api Status is shown
         self.status_loop.start()
 
     def cog_unload(self):
@@ -125,8 +126,13 @@ class PStreamStatus(commands.Cog):
         w_emoji = "🟢" if w_status == "Operational" else "🟠" if w_status == "Degraded" else "🔴"
         embed_main.add_field(name="Weblate", value=f"{w_emoji} {w_status}", inline=True)
 
+        embed_main.set_footer(text=f"Last Checked: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
+
+        if not self.show_fedapi:
+            return embed_main, None
+
         embed_feeds = discord.Embed(
-            title="Feed Statuses",
+            title="Fed-Api Status",
             color=discord.Color.green()
         )
         for region, data in feed_statuses.items():
@@ -135,9 +141,8 @@ class PStreamStatus(commands.Cog):
                 f"✅ **Succeeded**: `{data['succeeded']}`\n"
                 f"📊 **Total**: `{data['total']}`"
             )
-            embed_feeds.add_field(name=f"Feed - {region}", value=val, inline=True)
+            embed_feeds.add_field(name=region, value=val, inline=True)
 
-        embed_main.set_footer(text=f"Last Checked: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
         return embed_main, embed_feeds
 
     @tasks.loop(minutes=5)
@@ -157,16 +162,25 @@ class PStreamStatus(commands.Cog):
         if self.last_message:
             try:
                 old_msg_main = await self.channel_obj.fetch_message(self.last_message[1])
-                old_msg_feeds = await self.channel_obj.fetch_message(self.last_message[2])
                 await old_msg_main.edit(embed=embed_main)
-                await old_msg_feeds.edit(embed=embed_feeds)
+                if embed_feeds:
+                    old_msg_feeds = await self.channel_obj.fetch_message(self.last_message[2])
+                    await old_msg_feeds.edit(embed=embed_feeds)
+                else:
+                    # Optionally delete the old feed embed if disabled
+                    old_msg_feeds = await self.channel_obj.fetch_message(self.last_message[2])
+                    await old_msg_feeds.delete()
                 return
             except Exception:
                 pass
 
         msg_main = await self.channel_obj.send(embed=embed_main)
-        msg_feeds = await self.channel_obj.send(embed=embed_feeds)
-        self.last_message = (self.channel_obj.id, msg_main.id, msg_feeds.id)
+        msg_feeds = None
+        if embed_feeds:
+            msg_feeds = await self.channel_obj.send(embed=embed_feeds)
+            self.last_message = (self.channel_obj.id, msg_main.id, msg_feeds.id)
+        else:
+            self.last_message = (self.channel_obj.id, msg_main.id, None)
 
     @commands.group(invoke_without_command=True)
     async def pstreamstatus(self, ctx):
@@ -227,6 +241,20 @@ class PStreamStatus(commands.Cog):
         # Send each JSON embed separately to avoid hitting limits
         for embed in json_embeds:
             await ctx.send(embed=embed)
+
+    @pstreamstatus.command(name="disablefedapi")
+    async def disable_fedapi(self, ctx):
+        """Disable the Fed-Api Status embed."""
+        self.show_fedapi = False
+        await ctx.send("🛑 Fed-Api Status embed is now **disabled**.")
+        await self.send_or_update_status()
+
+    @pstreamstatus.command(name="enablefedapi")
+    async def enable_fedapi(self, ctx):
+        """Enable the Fed-Api Status embed."""
+        self.show_fedapi = True
+        await ctx.send("✅ Fed-Api Status embed is now **enabled**.")
+        await self.send_or_update_status()
 
 
 def setup(bot):
