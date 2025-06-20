@@ -216,6 +216,38 @@ class PStreamStatus(commands.Cog):
         )
         await ctx.send(embed=status_embed)
 
+    @pstreamstatus.command(name="debug")
+    async def debug_feed(self, ctx, region: str):
+        """Show status and raw response from a specific feed API as a file. Example: -pstreamstatus debug Asia"""
+        region = region.capitalize()
+        valid_regions = [name for name, _ in FEED_REGIONS]
+        if region not in valid_regions:
+            await ctx.send(f"❌ Invalid region. Valid regions: {', '.join(valid_regions)}")
+            return
+
+        raw = await self.get_feed_statuses(raw=True)
+        data = raw.get(region)
+        if data is None:
+            await ctx.send(f"❌ No data found for {region}.")
+            return
+
+        # Prepare a summary for the status embed
+        if not isinstance(data, str):
+            data = str(data)
+        total = re.search(r"Total\s*Request(?:s)?:?\s*(\d+)", data, re.I)
+        succeeded = re.search(r"Succeeded:?\s*(\d+)", data, re.I)
+        failed = re.search(r"Failed:?\s*(\d+)", data, re.I)
+        summary = (
+            f"**{region}**\n"
+            f"❌ Failed: `{failed.group(1) if failed else 'N/A'}`\n"
+            f"✅ Succeeded: `{succeeded.group(1) if succeeded else 'N/A'}`\n"
+            f"📊 Total: `{total.group(1) if total else 'N/A'}`"
+        )
+
+        # Send the full raw response as a file
+        file = discord.File(fp=io.BytesIO(data.encode()), filename=f"{region}_feed_status.txt")
+        await ctx.send(summary, file=file)
+
 
 def setup(bot):
     bot.add_cog(PStreamStatus(bot))
