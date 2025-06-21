@@ -13,11 +13,11 @@ CLOUDFLARE_STATUS_URL = "https://www.cloudflarestatus.com/api/v2/components.json
 BACKEND_HOST = "server.fifthwit.net"
 WEBLATE_HOST = "weblate.pstream.org"
 FEED_REGIONS = [
-    ("Asia", "https://fed-api-asia.pstream.org/status"),
-    ("East", "https://fed-api-east.pstream.org/status"),
-    ("Europe", "https://fed-api-europe.pstream.org/status"),
-    ("South", "https://fed-api-south.pstream.org/status"),
-    ("West", "https://fed-api-west.pstream.org/status"),
+    ("Asia", "https://fed-api-asia.pstream.org/status/data"),
+    ("East", "https://fed-api-east.pstream.org/status/data"),
+    ("Europe", "https://fed-api-europe.pstream.org/status/data"),
+    ("South", "https://fed-api-south.pstream.org/status/data"),
+    ("West", "https://fed-api-west.pstream.org/status/data"),
 ]
 
 class PStreamStatus(commands.Cog):
@@ -89,18 +89,14 @@ class PStreamStatus(commands.Cog):
             for name, url in FEED_REGIONS:
                 try:
                     async with session.get(url, timeout=5) as resp:
-                        text = await resp.text()
-                        # Regex to find the numbers (case-insensitive)
-                        total = re.search(r"Total\s*Request(?:s)?:?\s*(\d+)", text, re.I)
-                        succeeded = re.search(r"Succeeded:?\s*(\d+)", text, re.I)
-                        failed = re.search(r"Failed:?\s*(\d+)", text, re.I)
-                        data = {
-                            "total": total.group(1) if total else "N/A",
-                            "succeeded": succeeded.group(1) if succeeded else "N/A",
-                            "failed": failed.group(1) if failed else "N/A",
+                        json_data = await resp.json()
+                        # Expecting: {"failed":3,"succeeded":106,"total":109}
+                        results[name] = {
+                            "total": json_data.get("total", "N/A"),
+                            "succeeded": json_data.get("succeeded", "N/A"),
+                            "failed": json_data.get("failed", "N/A"),
                         }
-                        results[name] = data
-                        debug_info[name] = text
+                        debug_info[name] = json.dumps(json_data, indent=2)
                 except Exception as e:
                     results[name] = {"failed": "N/A", "succeeded": "N/A", "total": "N/A"}
                     debug_info[name] = str(e)
@@ -224,16 +220,17 @@ class PStreamStatus(commands.Cog):
         region = region.capitalize()
         valid_regions = [name for name, _ in FEED_REGIONS]
         if region not in valid_regions:
-            await ctx.send(f"❌ Invalid region. Valid regions: {', '.join(valid_regions)}")
+            msg = await ctx.send(f"❌ Invalid region. Valid regions: {', '.join(valid_regions)}")
+            await msg.delete(delay=60)
             return
 
         raw = await self.get_feed_statuses(raw=True)
         data = raw.get(region)
         if data is None:
-            await ctx.send(f"❌ No data found for {region}.")
+            msg = await ctx.send(f"❌ No data found for {region}.")
+            await msg.delete(delay=60)
             return
 
-        # Prepare a summary for the status embed
         if not isinstance(data, str):
             data = str(data)
         total = re.search(r"Total\s*Request(?:s)?:?\s*(\d+)", data, re.I)
@@ -246,9 +243,9 @@ class PStreamStatus(commands.Cog):
             f"📊 Total: `{total.group(1) if total else 'N/A'}`"
         )
 
-        # Send the full raw response as a file
         file = discord.File(fp=io.BytesIO(data.encode()), filename=f"{region}_feed_status.txt")
-        await ctx.send(summary, file=file)
+        msg = await ctx.send(summary, file=file)
+        await msg.delete(delay=60)
 
     @pstreamstatus.command(name="disablefedapi")
     async def disable_fedapi(self, ctx):
