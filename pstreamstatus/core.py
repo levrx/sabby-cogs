@@ -105,8 +105,10 @@ class PStreamStatus(commands.Cog):
         return results
 
     def create_embed(self, cf_status, backend_status, weblate_status):
+        now = int(datetime.utcnow().timestamp())
         embed = discord.Embed(
             title="🌐 Platform Status",
+            description=f"**Last Checked:** <t:{now}:F>",
             color=discord.Color.blurple()
         )
 
@@ -126,14 +128,13 @@ class PStreamStatus(commands.Cog):
         w_emoji = "🟢" if w_status == "Operational" else "🟠" if w_status == "Degraded" else "🔴"
         embed.add_field(name="Weblate", value=f"{w_emoji} {w_status}", inline=True)
 
-        # Replace the footer with a Discord timestamp
-        now = int(datetime.utcnow().timestamp())
-        embed.set_footer(text=f"Last Checked: <t:{now}:f>")
         return embed
 
     def create_fedapi_embed(self, feed_statuses):
+        now = int(datetime.utcnow().timestamp())
         embed = discord.Embed(
             title="FED API Status",
+            description=f"**Last Checked:** <t:{now}:F>",
             color=discord.Color.green()
         )
         for region, data in feed_statuses.items():
@@ -143,8 +144,6 @@ class PStreamStatus(commands.Cog):
                 f"📊 **Total**: `{data['total']}`"
             )
             embed.add_field(name=f"{region}", value=val, inline=True)
-        now = int(datetime.utcnow().timestamp())
-        embed.set_footer(text=f"Last Checked: <t:{now}:f>")
         return embed
 
     @tasks.loop(minutes=5)
