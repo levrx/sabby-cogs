@@ -253,9 +253,10 @@ class PStreamStatus(commands.Cog):
             f"📊 Total: `{total.group(1) if total else 'N/A'}`"
         )
 
-        # Send the full raw response as a file
+        # Send the full raw response as a file and auto-delete after 15 seconds
         file = discord.File(fp=io.BytesIO(data.encode()), filename=f"{region}_feed_status.txt")
-        await ctx.send(summary, file=file)
+        msg = await ctx.send(summary, file=file)
+        await msg.delete(delay=60)
 
     @pstreamstatus.command(name="disablefedapi")
     async def disable_fedapi(self, ctx):
