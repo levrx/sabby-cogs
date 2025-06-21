@@ -214,14 +214,14 @@ class PStreamStatus(commands.Cog):
 
     @pstreamstatus.command(name="disablefedapi")
     async def disable_fedapi(self, ctx):
-        """Disable the Fed-Api Status embed (separate message)."""
+        """Disable the Fed-Api Status embed."""
         self.show_fedapi = False
         await ctx.send("🛑 Fed-Api Status embed is now **disabled**.")
         await self.send_or_update_status()
 
     @pstreamstatus.command(name="enablefedapi")
     async def enable_fedapi(self, ctx):
-        """Enable the Fed-Api Status embed (separate message)."""
+        """Enable the Fed-Api Status embed."""
         self.show_fedapi = True
         await ctx.send("✅ Fed-Api Status embed is now **enabled**.")
         await self.send_or_update_status()
