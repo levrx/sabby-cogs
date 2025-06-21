@@ -85,14 +85,7 @@ class PStreamStatus(commands.Cog):
     async def get_feed_statuses(self, raw=False):
         results = {}
         debug_info = {}
-        headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/122.0.0.0 Safari/537.36"
-            )
-        }
-        async with aiohttp.ClientSession(headers=headers) as session:
+        async with aiohttp.ClientSession() as session:
             for name, url in FEED_REGIONS:
                 try:
                     async with session.get(url, timeout=5) as resp:
@@ -253,10 +246,9 @@ class PStreamStatus(commands.Cog):
             f"📊 Total: `{total.group(1) if total else 'N/A'}`"
         )
 
-        # Send the full raw response as a file and auto-delete after 15 seconds
+        # Send the full raw response as a file
         file = discord.File(fp=io.BytesIO(data.encode()), filename=f"{region}_feed_status.txt")
-        msg = await ctx.send(summary, file=file)
-        await msg.delete(delay=60)
+        await ctx.send(summary, file=file)
 
     @pstreamstatus.command(name="disablefedapi")
     async def disable_fedapi(self, ctx):
