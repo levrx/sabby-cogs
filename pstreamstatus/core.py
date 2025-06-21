@@ -137,13 +137,23 @@ class PStreamStatus(commands.Cog):
             description=f"**Last Checked:** <t:{now}:F>",
             color=discord.Color.green()
         )
+        # Map region names to their status URLs
+        region_links = {
+            "Asia": "https://fed-api-asia.pstream.org/status",
+            "East": "https://fed-api-east.pstream.org/status",
+            "Europe": "https://fed-api-europe.pstream.org/status",
+            "South": "https://fed-api-south.pstream.org/status",
+            "West": "https://fed-api-west.pstream.org/status",
+        }
         for region, data in feed_statuses.items():
             val = (
                 f"❌ **Failed**: `{data['failed']}`\n"
                 f"✅ **Succeeded**: `{data['succeeded']}`\n"
                 f"📊 **Total**: `{data['total']}`"
             )
-            embed.add_field(name=f"{region}", value=val, inline=True)
+            # Make the region name a clickable link
+            region_name = f"[{region}]({region_links.get(region, '')})"
+            embed.add_field(name=region_name, value=val, inline=True)
         return embed
 
     @tasks.loop(minutes=5)
