@@ -25,9 +25,10 @@ class PStreamStatus(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self.last_message = None  # (channel_id, message_id)
+        self.last_message = None  # (channel_id, message_id) for main embed
+        self.last_fedapi_message = None  # (channel_id, message_id) for fedapi embed
         self.channel_obj = None  # discord.TextChannel
-        self.show_fedapi = True  # Add this line
+        self.show_fedapi = True
         self.status_loop.start()
 
     def cog_unload(self):
@@ -90,7 +91,6 @@ class PStreamStatus(commands.Cog):
                 try:
                     async with session.get(url, timeout=5) as resp:
                         json_data = await resp.json()
-                        # Expecting: {"failed":3,"succeeded":106,"total":109}
                         results[name] = {
                             "total": json_data.get("total", "N/A"),
                             "succeeded": json_data.get("succeeded", "N/A"),
@@ -104,7 +104,7 @@ class PStreamStatus(commands.Cog):
             return debug_info
         return results
 
-    def create_embed(self, cf_status, backend_status, weblate_status, feed_statuses):
+    def create_embed(self, cf_status, backend_status, weblate_status):
         embed = discord.Embed(
             title="🌐 Platform Status",
             color=discord.Color.blurple()
@@ -126,15 +126,21 @@ class PStreamStatus(commands.Cog):
         w_emoji = "🟢" if w_status == "Operational" else "🟠" if w_status == "Degraded" else "🔴"
         embed.add_field(name="Weblate", value=f"{w_emoji} {w_status}", inline=True)
 
-        if self.show_fedapi:
-            for region, data in feed_statuses.items():
-                val = (
-                    f"❌ **Failed**: `{data['failed']}`\n"
-                    f"✅ **Succeeded**: `{data['succeeded']}`\n"
-                    f"📊 **Total**: `{data['total']}`"
-                )
-                embed.add_field(name=f"Feed - {region}", value=val, inline=True)
+        embed.set_footer(text=f"Last Checked: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
+        return embed
 
+    def create_fedapi_embed(self, feed_statuses):
+        embed = discord.Embed(
+            title="Feed API Status",
+            color=discord.Color.green()
+        )
+        for region, data in feed_statuses.items():
+            val = (
+                f"❌ **Failed**: `{data['failed']}`\n"
+                f"✅ **Succeeded**: `{data['succeeded']}`\n"
+                f"📊 **Total**: `{data['total']}`"
+            )
+            embed.add_field(name=f"{region}", value=val, inline=True)
         embed.set_footer(text=f"Last Checked: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
         return embed
 
@@ -149,18 +155,42 @@ class PStreamStatus(commands.Cog):
         backend_status = await self.ping_host(BACKEND_HOST)
         weblate_status = await self.check_weblate_status()
         feed_statuses = await self.get_feed_statuses()
-        embed = self.create_embed(cf_status, backend_status, weblate_status, feed_statuses)
 
+        # Main embed
+        embed = self.create_embed(cf_status, backend_status, weblate_status)
         if self.last_message:
             try:
                 old_msg = await self.channel_obj.fetch_message(self.last_message[1])
                 await old_msg.edit(embed=embed)
-                return
             except Exception:
-                pass
+                msg = await self.channel_obj.send(embed=embed)
+                self.last_message = (self.channel_obj.id, msg.id)
+        else:
+            msg = await self.channel_obj.send(embed=embed)
+            self.last_message = (self.channel_obj.id, msg.id)
 
-        msg = await self.channel_obj.send(embed=embed)
-        self.last_message = (self.channel_obj.id, msg.id)
+        # FedAPI embed
+        if self.show_fedapi:
+            fedapi_embed = self.create_fedapi_embed(feed_statuses)
+            if getattr(self, "last_fedapi_message", None):
+                try:
+                    old_fedapi_msg = await self.channel_obj.fetch_message(self.last_fedapi_message[1])
+                    await old_fedapi_msg.edit(embed=fedapi_embed)
+                except Exception:
+                    fedapi_msg = await self.channel_obj.send(embed=fedapi_embed)
+                    self.last_fedapi_message = (self.channel_obj.id, fedapi_msg.id)
+            else:
+                fedapi_msg = await self.channel_obj.send(embed=fedapi_embed)
+                self.last_fedapi_message = (self.channel_obj.id, fedapi_msg.id)
+        else:
+            # If disabled, try to delete the old fedapi message
+            if getattr(self, "last_fedapi_message", None):
+                try:
+                    old_fedapi_msg = await self.channel_obj.fetch_message(self.last_fedapi_message[1])
+                    await old_fedapi_msg.delete()
+                except Exception:
+                    pass
+                self.last_fedapi_message = None
 
     @commands.group(invoke_without_command=True)
     async def pstreamstatus(self, ctx):
@@ -181,6 +211,20 @@ class PStreamStatus(commands.Cog):
         """Set the status output channel."""
         self.channel_obj = channel
         await ctx.send(f"✅ Status messages will now be posted and updated in {channel.mention}.")
+
+    @pstreamstatus.command(name="disablefedapi")
+    async def disable_fedapi(self, ctx):
+        """Disable the Fed-Api Status embed (separate message)."""
+        self.show_fedapi = False
+        await ctx.send("🛑 Fed-Api Status embed is now **disabled**.")
+        await self.send_or_update_status()
+
+    @pstreamstatus.command(name="enablefedapi")
+    async def enable_fedapi(self, ctx):
+        """Enable the Fed-Api Status embed (separate message)."""
+        self.show_fedapi = True
+        await ctx.send("✅ Fed-Api Status embed is now **enabled**.")
+        await self.send_or_update_status()
 
     @pstreamstatus.command(name="debugfeeds")
     async def debug_feeds(self, ctx):
