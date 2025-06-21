@@ -231,16 +231,20 @@ class PStreamStatus(commands.Cog):
             await msg.delete(delay=60)
             return
 
-        if not isinstance(data, str):
-            data = str(data)
-        total = re.search(r"Total\s*Request(?:s)?:?\s*(\d+)", data, re.I)
-        succeeded = re.search(r"Succeeded:?\s*(\d+)", data, re.I)
-        failed = re.search(r"Failed:?\s*(\d+)", data, re.I)
+        # Parse JSON string to dict
+        try:
+            json_data = json.loads(data)
+            failed = json_data.get("failed", "N/A")
+            succeeded = json_data.get("succeeded", "N/A")
+            total = json_data.get("total", "N/A")
+        except Exception:
+            failed = succeeded = total = "N/A"
+
         summary = (
             f"**{region}**\n"
-            f"❌ Failed: `{failed.group(1) if failed else 'N/A'}`\n"
-            f"✅ Succeeded: `{succeeded.group(1) if succeeded else 'N/A'}`\n"
-            f"📊 Total: `{total.group(1) if total else 'N/A'}`"
+            f"❌ Failed: `{failed}`\n"
+            f"✅ Succeeded: `{succeeded}`\n"
+            f"📊 Total: `{total}`"
         )
 
         file = discord.File(fp=io.BytesIO(data.encode()), filename=f"{region}_feed_status.txt")
