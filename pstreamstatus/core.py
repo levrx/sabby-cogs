@@ -137,23 +137,13 @@ class PStreamStatus(commands.Cog):
             description=f"**Last Checked:** <t:{now}:F>",
             color=discord.Color.green()
         )
-        # Map region names to their status URLs
-        region_links = {
-            "Asia": "https://fed-api-asia.pstream.org/status",
-            "East": "https://fed-api-east.pstream.org/status",
-            "Europe": "https://fed-api-europe.pstream.org/status",
-            "South": "https://fed-api-south.pstream.org/status",
-            "West": "https://fed-api-west.pstream.org/status",
-        }
         for region, data in feed_statuses.items():
             val = (
                 f"❌ **Failed**: `{data['failed']}`\n"
                 f"✅ **Succeeded**: `{data['succeeded']}`\n"
                 f"📊 **Total**: `{data['total']}`"
             )
-            # Make the region name a clickable link
-            region_name = f"[{region}]({region_links.get(region, '')})"
-            embed.add_field(name=region_name, value=val, inline=True)
+            embed.add_field(name=f"{region}", value=val, inline=True)
         return embed
 
     @tasks.loop(minutes=5)
@@ -184,16 +174,15 @@ class PStreamStatus(commands.Cog):
         # FedAPI embed
         if self.show_fedapi:
             fedapi_embed = self.create_fedapi_embed(feed_statuses)
-            view = FedApiLinksView()
             if getattr(self, "last_fedapi_message", None):
                 try:
                     old_fedapi_msg = await self.channel_obj.fetch_message(self.last_fedapi_message[1])
-                    await old_fedapi_msg.edit(embed=fedapi_embed, view=view)
+                    await old_fedapi_msg.edit(embed=fedapi_embed)
                 except Exception:
-                    fedapi_msg = await self.channel_obj.send(embed=fedapi_embed, view=view)
+                    fedapi_msg = await self.channel_obj.send(embed=fedapi_embed)
                     self.last_fedapi_message = (self.channel_obj.id, fedapi_msg.id)
             else:
-                fedapi_msg = await self.channel_obj.send(embed=fedapi_embed, view=view)
+                fedapi_msg = await self.channel_obj.send(embed=fedapi_embed)
                 self.last_fedapi_message = (self.channel_obj.id, fedapi_msg.id)
         else:
             # If disabled, try to delete the old fedapi message
@@ -307,19 +296,6 @@ class PStreamStatus(commands.Cog):
         self.show_fedapi = True
         await ctx.send("✅ Fed-Api Status embed is now **enabled**.")
         await self.send_or_update_status()
-
-    class FedApiLinksView(discord.ui.View):
-        def __init__(self):
-            super().__init__()
-            region_links = {
-                "Asia": "https://fed-api-asia.pstream.org/status",
-                "East": "https://fed-api-east.pstream.org/status",
-                "Europe": "https://fed-api-europe.pstream.org/status",
-                "South": "https://fed-api-south.pstream.org/status",
-                "West": "https://fed-api-west.pstream.org/status",
-            }
-            for region, url in region_links.items():
-                self.add_item(discord.ui.Button(label=region, url=url))
 
 
 def setup(bot):
