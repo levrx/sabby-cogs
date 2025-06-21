@@ -85,7 +85,14 @@ class PStreamStatus(commands.Cog):
     async def get_feed_statuses(self, raw=False):
         results = {}
         debug_info = {}
-        async with aiohttp.ClientSession() as session:
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            )
+        }
+        async with aiohttp.ClientSession(headers=headers) as session:
             for name, url in FEED_REGIONS:
                 try:
                     async with session.get(url, timeout=5) as resp:
