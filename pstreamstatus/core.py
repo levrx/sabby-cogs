@@ -67,7 +67,10 @@ class PStreamStatus(commands.Cog):
         self.last_fedapi_message = None  # (channel_id, message_id) for fedapi embed
         self.channel_obj = None  # discord.TextChannel
         self.show_fedapi = True
-        self.bot.loop.create_task(self.load_state())
+        # Do not start status_loop or load_state here
+
+    async def cog_load(self):
+        await self.load_state()
         self.status_loop.start()
 
     def cog_unload(self):
