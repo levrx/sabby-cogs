@@ -52,8 +52,13 @@ class PStreamStatus(commands.Cog):
                     except Exception as e:
                         self.log_debug(f"Failed to fetch channel {channel_id}: {e}")
                         channel = None
-                self.channel_obj = channel
-                self.log_debug(f"Loaded channel_obj: {getattr(self.channel_obj, 'id', None)}")
+                if channel is None:
+                    self.log_debug(f"Channel {channel_id} could not be found or fetched. self.channel_obj will remain None.")
+                else:
+                    self.channel_obj = channel
+                    self.log_debug(f"Loaded channel_obj: {getattr(self.channel_obj, 'id', None)}")
+            else:
+                self.log_debug("No channel_id found in state file.")
             self.last_message = data.get("last_message")
             self.last_fedapi_message = data.get("last_fedapi_message")
             self.log_debug(f"Loaded last_message: {self.last_message}, last_fedapi_message: {self.last_fedapi_message}")
@@ -272,7 +277,8 @@ class PStreamStatus(commands.Cog):
     async def refresh_status(self, ctx):
         """Manually refresh and update the status message in the set channel."""
         if not self.channel_obj:
-            await ctx.send("❌ You must set a channel first using `-pstreamstatus channel #channel-name`.")
+            await ctx.send("❌ No valid channel is set or the channel could not be found. Please use `-pstreamstatus channel #channel-name` to set a valid channel.")
+            self.log_debug("refresh_status called but self.channel_obj is None. State may not have loaded or channel is invalid.")
             return
         await self.send_or_update_status()
         await ctx.tick()
