@@ -21,6 +21,31 @@ FEED_REGIONS = [
 ]
 
 class PStreamStatus(commands.Cog):
+    STATE_FILE = "status_state.json"
+
+    def save_state(self):
+        data = {
+            "channel_id": self.channel_obj.id if self.channel_obj else None,
+            "last_message": self.last_message,
+            "last_fedapi_message": getattr(self, "last_fedapi_message", None),
+        }
+        try:
+            with open(self.STATE_FILE, "w") as f:
+                json.dump(data, f)
+        except Exception:
+            pass
+
+    def load_state(self):
+        try:
+            with open(self.STATE_FILE, "r") as f:
+                data = json.load(f)
+            channel_id = data.get("channel_id")
+            if channel_id:
+                self.channel_obj = self.bot.get_channel(channel_id)
+            self.last_message = data.get("last_message")
+            self.last_fedapi_message = data.get("last_fedapi_message")
+        except Exception:
+            pass
     """Check Cloudflare, backend, weblate, and feed statuses periodically."""
 
     def __init__(self, bot):
@@ -29,6 +54,7 @@ class PStreamStatus(commands.Cog):
         self.last_fedapi_message = None  # (channel_id, message_id) for fedapi embed
         self.channel_obj = None  # discord.TextChannel
         self.show_fedapi = True
+        self.load_state()
         self.status_loop.start()
 
     def cog_unload(self):
@@ -194,6 +220,9 @@ class PStreamStatus(commands.Cog):
                     pass
                 self.last_fedapi_message = None
 
+        # Save state after updating messages
+        self.save_state()
+
     @commands.group(invoke_without_command=True)
     async def pstreamstatus(self, ctx):
         """PStreamStatus commands."""
@@ -212,6 +241,7 @@ class PStreamStatus(commands.Cog):
     async def set_channel(self, ctx, channel: discord.TextChannel):
         """Set the status output channel."""
         self.channel_obj = channel
+        self.save_state()
         await ctx.send(f"✅ Status messages will now be posted and updated in {channel.mention}.")
 
     @pstreamstatus.command(name="debugfeeds")
