@@ -27,9 +27,12 @@ class PStreamStatus(commands.Cog):
     STATE_FILE = "status_state.json"
 
     def save_state(self):
+        if not self.channel_obj:
+            self.log_debug("save_state called but self.channel_obj is None. State will NOT be saved to avoid overwriting with nulls.")
+            return
         self.log_debug(f"Saving state: channel_obj={getattr(self.channel_obj, 'id', None)}, last_message={self.last_message}, last_fedapi_message={getattr(self, 'last_fedapi_message', None)}")
         data = {
-            "channel_id": self.channel_obj.id if self.channel_obj else None,
+            "channel_id": self.channel_obj.id,
             "last_message": self.last_message,
             "last_fedapi_message": getattr(self, "last_fedapi_message", None),
         }
