@@ -82,6 +82,7 @@ class PStreamStatus(commands.Cog):
         self.status_loop.start()
 
     def cog_unload(self):
+        self.log_debug("cog_unload called. Not saving state to avoid overwriting with nulls.")
         self.status_loop.cancel()
 
     async def get_cloudflare_status(self):
