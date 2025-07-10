@@ -21,9 +21,13 @@ FEED_REGIONS = [
 ]
 
 class PStreamStatus(commands.Cog):
+    def log_debug(self, msg):
+        # Simple debug logger, prints to console. Replace with logging if desired.
+        print(f"[PStreamStatus DEBUG] {msg}")
     STATE_FILE = "status_state.json"
 
     def save_state(self):
+        self.log_debug(f"Saving state: channel_obj={getattr(self.channel_obj, 'id', None)}, last_message={self.last_message}, last_fedapi_message={getattr(self, 'last_fedapi_message', None)}")
         data = {
             "channel_id": self.channel_obj.id if self.channel_obj else None,
             "last_message": self.last_message,
@@ -45,13 +49,16 @@ class PStreamStatus(commands.Cog):
                 if channel is None:
                     try:
                         channel = await self.bot.fetch_channel(channel_id)
-                    except Exception:
+                    except Exception as e:
+                        self.log_debug(f"Failed to fetch channel {channel_id}: {e}")
                         channel = None
                 self.channel_obj = channel
+                self.log_debug(f"Loaded channel_obj: {getattr(self.channel_obj, 'id', None)}")
             self.last_message = data.get("last_message")
             self.last_fedapi_message = data.get("last_fedapi_message")
-        except Exception:
-            pass
+            self.log_debug(f"Loaded last_message: {self.last_message}, last_fedapi_message: {self.last_fedapi_message}")
+        except Exception as e:
+            self.log_debug(f"Failed to load state: {e}")
     """Check Cloudflare, backend, weblate, and feed statuses periodically."""
 
     def __init__(self, bot):
@@ -196,12 +203,16 @@ class PStreamStatus(commands.Cog):
             try:
                 old_msg = await self.channel_obj.fetch_message(self.last_message[1])
                 await old_msg.edit(embed=embed)
-            except Exception:
+                self.log_debug(f"Edited main embed message {self.last_message[1]}")
+            except Exception as e:
+                self.log_debug(f"Failed to edit main embed message {self.last_message[1]}: {e}")
                 msg = await self.channel_obj.send(embed=embed)
                 self.last_message = (self.channel_obj.id, msg.id)
+                self.log_debug(f"Sent new main embed message {msg.id}")
         else:
             msg = await self.channel_obj.send(embed=embed)
             self.last_message = (self.channel_obj.id, msg.id)
+            self.log_debug(f"Sent new main embed message {msg.id}")
 
         # FedAPI embed
         if self.show_fedapi:
@@ -210,24 +221,44 @@ class PStreamStatus(commands.Cog):
                 try:
                     old_fedapi_msg = await self.channel_obj.fetch_message(self.last_fedapi_message[1])
                     await old_fedapi_msg.edit(embed=fedapi_embed)
-                except Exception:
+                    self.log_debug(f"Edited fedapi embed message {self.last_fedapi_message[1]}")
+                except Exception as e:
+                    self.log_debug(f"Failed to edit fedapi embed message {self.last_fedapi_message[1]}: {e}")
                     fedapi_msg = await self.channel_obj.send(embed=fedapi_embed)
                     self.last_fedapi_message = (self.channel_obj.id, fedapi_msg.id)
+                    self.log_debug(f"Sent new fedapi embed message {fedapi_msg.id}")
             else:
                 fedapi_msg = await self.channel_obj.send(embed=fedapi_embed)
                 self.last_fedapi_message = (self.channel_obj.id, fedapi_msg.id)
+                self.log_debug(f"Sent new fedapi embed message {fedapi_msg.id}")
         else:
             # If disabled, try to delete the old fedapi message
             if getattr(self, "last_fedapi_message", None):
                 try:
                     old_fedapi_msg = await self.channel_obj.fetch_message(self.last_fedapi_message[1])
                     await old_fedapi_msg.delete()
-                except Exception:
-                    pass
+                    self.log_debug(f"Deleted fedapi embed message {self.last_fedapi_message[1]}")
+                except Exception as e:
+                    self.log_debug(f"Failed to delete fedapi embed message {self.last_fedapi_message[1]}: {e}")
                 self.last_fedapi_message = None
 
         # Save state after updating messages
         self.save_state()
+
+    @commands.group(invoke_without_command=True)
+    async def pstreamstatus(self, ctx):
+        """PStreamStatus commands."""
+        await ctx.send_help()
+
+    @pstreamstatus.command(name="debugstate")
+    async def debug_state(self, ctx):
+        """Show the current saved state for debugging."""
+        state = {
+            "channel_id": getattr(self.channel_obj, "id", None),
+            "last_message": self.last_message,
+            "last_fedapi_message": getattr(self, "last_fedapi_message", None),
+        }
+        await ctx.send(f"Current state: ```{json.dumps(state, indent=2)}```")
 
     @commands.group(invoke_without_command=True)
     async def pstreamstatus(self, ctx):
