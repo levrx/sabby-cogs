@@ -1,3 +1,4 @@
+
 import discord
 from redbot.core import commands
 from discord.ext import tasks
@@ -8,6 +9,7 @@ from datetime import datetime
 import re
 import json
 import io
+from redbot.core import Config
 
 CLOUDFLARE_STATUS_URL = "https://www.cloudflarestatus.com/api/v2/components.json"
 BACKEND_HOST = "server.fifthwit.net"
@@ -21,32 +23,24 @@ FEED_REGIONS = [
 ]
 
 class PStreamStatus(commands.Cog):
-    def log_debug(self, msg):
-        # Simple debug logger, prints to console. Replace with logging if desired.
-        print(f"[PStreamStatus DEBUG] {msg}")
-    STATE_FILE = "status_state.json"
 
-    def save_state(self):
+    def log_debug(self, msg):
+        print(f"[PStreamStatus DEBUG] {msg}")
+
+    config: Config
+
+    async def save_state(self):
         if not self.channel_obj:
             self.log_debug("save_state called but self.channel_obj is None. State will NOT be saved to avoid overwriting with nulls.")
             return
         self.log_debug(f"Saving state: channel_obj={getattr(self.channel_obj, 'id', None)}, last_message={self.last_message}, last_fedapi_message={getattr(self, 'last_fedapi_message', None)}")
-        data = {
-            "channel_id": self.channel_obj.id,
-            "last_message": self.last_message,
-            "last_fedapi_message": getattr(self, "last_fedapi_message", None),
-        }
-        try:
-            with open(self.STATE_FILE, "w") as f:
-                json.dump(data, f)
-        except Exception:
-            pass
+        await self.config.channel_id.set(self.channel_obj.id)
+        await self.config.last_message.set(self.last_message)
+        await self.config.last_fedapi_message.set(getattr(self, "last_fedapi_message", None))
 
     async def load_state(self):
         try:
-            with open(self.STATE_FILE, "r") as f:
-                data = json.load(f)
-            channel_id = data.get("channel_id")
+            channel_id = await self.config.channel_id()  # int or None
             if channel_id:
                 channel = self.bot.get_channel(channel_id)
                 if channel is None:
@@ -61,9 +55,9 @@ class PStreamStatus(commands.Cog):
                     self.channel_obj = channel
                     self.log_debug(f"Loaded channel_obj: {getattr(self.channel_obj, 'id', None)}")
             else:
-                self.log_debug("No channel_id found in state file.")
-            self.last_message = data.get("last_message")
-            self.last_fedapi_message = data.get("last_fedapi_message")
+                self.log_debug("No channel_id found in config.")
+            self.last_message = await self.config.last_message()
+            self.last_fedapi_message = await self.config.last_fedapi_message()
             self.log_debug(f"Loaded last_message: {self.last_message}, last_fedapi_message: {self.last_fedapi_message}")
         except Exception as e:
             self.log_debug(f"Failed to load state: {e}")
@@ -75,6 +69,8 @@ class PStreamStatus(commands.Cog):
         self.last_fedapi_message = None  # (channel_id, message_id) for fedapi embed
         self.channel_obj = None  # discord.TextChannel
         self.show_fedapi = True
+        self.config = Config.get_conf(self, identifier=1234567890, force_registration=True)
+        self.config.register_global(channel_id=None, last_message=None, last_fedapi_message=None)
         # Do not start status_loop or load_state here
 
     async def cog_load(self):
@@ -255,7 +251,7 @@ class PStreamStatus(commands.Cog):
                 self.last_fedapi_message = None
 
         # Save state after updating messages
-        self.save_state()
+        await self.save_state()
 
     @commands.group(invoke_without_command=True)
     async def pstreamstatus(self, ctx):
@@ -291,7 +287,7 @@ class PStreamStatus(commands.Cog):
     async def set_channel(self, ctx, channel: discord.TextChannel):
         """Set the status output channel."""
         self.channel_obj = channel
-        self.save_state()
+        await self.save_state()
         await ctx.send(f"✅ Status messages will now be posted and updated in {channel.mention}.")
 
     @pstreamstatus.command(name="debugfeeds")
