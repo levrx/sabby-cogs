@@ -35,13 +35,19 @@ class PStreamStatus(commands.Cog):
         except Exception:
             pass
 
-    def load_state(self):
+    async def load_state(self):
         try:
             with open(self.STATE_FILE, "r") as f:
                 data = json.load(f)
             channel_id = data.get("channel_id")
             if channel_id:
-                self.channel_obj = self.bot.get_channel(channel_id)
+                channel = self.bot.get_channel(channel_id)
+                if channel is None:
+                    try:
+                        channel = await self.bot.fetch_channel(channel_id)
+                    except Exception:
+                        channel = None
+                self.channel_obj = channel
             self.last_message = data.get("last_message")
             self.last_fedapi_message = data.get("last_fedapi_message")
         except Exception:
@@ -54,7 +60,7 @@ class PStreamStatus(commands.Cog):
         self.last_fedapi_message = None  # (channel_id, message_id) for fedapi embed
         self.channel_obj = None  # discord.TextChannel
         self.show_fedapi = True
-        self.load_state()
+        self.bot.loop.create_task(self.load_state())
         self.status_loop.start()
 
     def cog_unload(self):
