@@ -13,7 +13,7 @@ from redbot.core import Config
 
 CLOUDFLARE_STATUS_URL = "https://www.cloudflarestatus.com/api/v2/components.json"
 BACKEND_HOST = "server.fifthwit.net"
-WEBLATE_HOST = "weblate.pstream.org"
+WEBLATE_HOST = "weblate.pstream.mov"
 FEED_REGIONS = [
     ("Asia", "https://fed-api-asia.pstream.org/status/data"),
     ("East", "https://fed-api-east.pstream.org/status/data"),
