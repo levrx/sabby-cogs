@@ -15,11 +15,11 @@ CLOUDFLARE_STATUS_URL = "https://www.cloudflarestatus.com/api/v2/components.json
 BACKEND_HOST = "server.fifthwit.net"
 WEBLATE_HOST = "weblate.pstream.mov"
 FEED_REGIONS = [
-    ("Asia", "https://fed-api-asia.pstream.org/status/data"),
-    ("East", "https://fed-api-east.pstream.org/status/data"),
-    ("Europe", "https://fed-api-europe.pstream.org/status/data"),
-    ("South", "https://fed-api-south.pstream.org/status/data"),
-    ("West", "https://fed-api-west.pstream.org/status/data"),
+    ("Asia", "https://fed-asia.pstream.mov/status/data"),
+    ("East", "https://fed-east.pstream.mov/status/data"),
+    ("Europe", "https://fed-europe.pstream.mov/status/data"),
+    ("South", "https://fed-south.pstream.mov/status/data"),
+    ("West", "https://fed-west.pstream.mov/status/data"),
 ]
 
 class PStreamStatus(commands.Cog):
