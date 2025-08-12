@@ -15,7 +15,7 @@ CLOUDFLARE_STATUS_URL = "https://www.cloudflarestatus.com/api/v2/components.json
 BACKEND_HOST = "server.fifthwit.net"
 WEBLATE_HOST = "weblate.pstream.mov"
 FEED_REGIONS = [
-    ("API", "https://fed-api.pstream.mov/status/data"),
+    ("Everywhere", "https://fed-api.pstream.mov/status/data"),
 ]
 
 class PStreamStatus(commands.Cog):
