@@ -151,24 +151,43 @@ class PStreamStatus(commands.Cog):
                                     except ValueError:
                                         failed = 0
                             total = succeeded + failed
+
+                            # PING a separate endpoint for CIA API
+                            ping_status, ping_ms = await self.ping_host("febbox.andresdev.org")
+
                             results[name] = {
                                 "succeeded": succeeded,
                                 "failed": failed,
                                 "total": total,
+                                "ping_status": ping_status,
+                                "ping_ms": ping_ms,
                             }
                             debug_info[name] = text_data  # keep full metrics dump
-                        else:
+
+                        else:  # FED API
                             # Normal JSON feed
                             json_data = await resp.json()
+
+                            # PING the actual feed endpoint
+                            ping_status, ping_ms = await self.ping_host("fed-api.pstream.mov")
+
                             results[name] = {
                                 "total": json_data.get("total", "N/A"),
                                 "succeeded": json_data.get("succeeded", "N/A"),
                                 "failed": json_data.get("failed", "N/A"),
+                                "ping_status": ping_status,
+                                "ping_ms": ping_ms,
                             }
                             debug_info[name] = json.dumps(json_data, indent=2)
 
                 except Exception as e:
-                    results[name] = {"failed": "N/A", "succeeded": "N/A", "total": "N/A"}
+                    results[name] = {
+                        "failed": "N/A",
+                        "succeeded": "N/A",
+                        "total": "N/A",
+                        "ping_status": "Down",
+                        "ping_ms": None,
+                    }
                     debug_info[name] = str(e)
 
         if raw:
@@ -209,10 +228,19 @@ class PStreamStatus(commands.Cog):
             color=discord.Color.green()
         )
         for region, data in feed_statuses.items():
+            # Build status line
+            ping_status = data.get("ping_status", "Unknown")
+            ping_ms = data.get("ping_ms")
+            emoji = "🟢" if ping_status == "Operational" else "🟠" if ping_status == "Degraded" else "🔴"
+            status_line = f"{emoji} {ping_status}"
+            if ping_ms:
+                status_line += f" ({ping_ms:.1f} ms)"
+
             val = (
                 f"❌ **Failed**: `{data['failed']}`\n"
                 f"✅ **Succeeded**: `{data['succeeded']}`\n"
-                f"📊 **Total**: `{data['total']}`"
+                f"📊 **Total**: `{data['total']}`\n"
+                f"📡 **Status**: {status_line}"
             )
             embed.add_field(name=f"{region}", value=val, inline=True)
         return embed
@@ -340,7 +368,7 @@ class PStreamStatus(commands.Cog):
 
         # Send a summary embed
         status_embed = discord.Embed(
-            title="FED API Status",
+            title="API Status",
             description="\n\n".join(statuses),
             color=discord.Color.green()
         )
