@@ -137,7 +137,7 @@ class PStreamStatus(commands.Cog):
                         text_data = await resp.text()
 
                         if name == "CIA API":
-                            # Parse Prometheus metrics
+                            # Parse providers metrics
                             succeeded = failed = 0
                             for line in text_data.splitlines():
                                 if 'mw_provider_status_count{provider_id="cia-api",status="success"}' in line:
