@@ -153,7 +153,7 @@ class PStreamStatus(commands.Cog):
                             total = succeeded + failed
 
                             # Ping a separate endpoint (placeholder for now)
-                            ping_status, _ = await self.ping_host("example.com")
+                            ping_status, _ = await self.ping_host("febbox.andresdev.org")
 
                             results[name] = {
                                 "succeeded": succeeded,
