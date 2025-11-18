@@ -1,4 +1,3 @@
-
 import discord
 from redbot.core import commands
 from discord.ext import tasks
@@ -12,6 +11,8 @@ import io
 from redbot.core import Config
 
 CLOUDFLARE_STATUS_URL = "https://www.cloudflarestatus.com/api/v2/components.json"
+CLOUDFLARE_API_URL = "https://www.cloudflarestatus.com/api/v2/status.json" # grabs if their is an issue or if its all A-OK
+CLOUDFLARE_API_MESSAGE_ID = ""
 BACKEND_HOST = "server.fifthwit.net"
 WEBLATE_HOST = "weblate.pstream.mov"
 FEED_REGIONS = [
@@ -34,6 +35,7 @@ class PStreamStatus(commands.Cog):
         await self.config.channel_id.set(self.channel_obj.id)
         await self.config.last_message.set(self.last_message)
         await self.config.last_fedapi_message.set(getattr(self, "last_fedapi_message", None))
+        await self.config.cfapi_message.set(getattr(self, "cfapi_message", None))
 
     async def load_state(self):
         try:
@@ -56,6 +58,9 @@ class PStreamStatus(commands.Cog):
             self.last_message = await self.config.last_message()
             self.last_fedapi_message = await self.config.last_fedapi_message()
             self.log_debug(f"Loaded last_message: {self.last_message}, last_fedapi_message: {self.last_fedapi_message}")
+            self.cfapi_message = await self.config.cfapi_message()
+            self.log_debug(f"Loaded cfapi_message: {self.cfapi_message}")
+
         except Exception as e:
             self.log_debug(f"Failed to load state: {e}")
     """Check Cloudflare, backend, weblate, and feed statuses periodically."""
@@ -67,7 +72,7 @@ class PStreamStatus(commands.Cog):
         self.channel_obj = None  # discord.TextChannel
         self.show_fedapi = True
         self.config = Config.get_conf(self, identifier=1234567890, force_registration=True)
-        self.config.register_global(channel_id=None, last_message=None, last_fedapi_message=None)
+        self.config.register_global(channel_id=None, last_message=None, last_fedapi_message=None, cfapi_message=None)
         # Do not start status_loop or load_state here
 
     async def cog_load(self):
@@ -102,6 +107,70 @@ class PStreamStatus(commands.Cog):
                     return "Down", None
         except Exception:
             return "Down", None
+
+    async def check_cfapi_status(self):
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(CLOUDFLARE_API_URL, timeout=5) as resp:
+                    if resp.status != 200:
+                        return "Unknown", "Unable to fetch status"
+                    data = await resp.json()
+                    status = data.get("status", {})
+                    indicator = status.get("indicator", "Unknown")
+                    description = status.get("description", "No description available")
+                    return indicator, description
+        except Exception as e:
+            self.log_debug(f"Failed to check Cloudflare API status: {e}")
+            return "Unknown", "Error occurred while fetching status"
+
+    async def handle_cfapi_status(self, cfapi_status):
+        """Send or update the Cloudflare API status embed."""
+        indicator, description = cfapi_status
+
+        # Create the embed no matter what
+        if indicator != "none":
+            embed = discord.Embed(
+                title="⚠️ Cloudflare Issue Detected",
+                description=f"**Status:** {indicator.title()}\n**Description:** {description}",
+                color=discord.Color.red()
+            )
+        else:
+            embed = None  # Clear means delete
+
+        # CASE 1 — delete if no issue
+        if indicator == "none":
+            if self.cfapi_message:
+                try:
+                    old = await self.channel_obj.fetch_message(self.cfapi_message[1])
+                    await old.delete()
+                    self.log_debug(f"Deleted CFAPI message {self.cfapi_message[1]}")
+                except Exception as e:
+                    self.log_debug(f"Unable to delete CFAPI message: {e}")
+                self.cfapi_message = None
+                await self.save_state()
+            return
+
+        # CASE 2 — new message
+        if not self.cfapi_message:
+            msg = await self.channel_obj.send(embed=embed)
+            self.cfapi_message = (self.channel_obj.id, msg.id)
+            self.log_debug(f"Sent new CFAPI message {msg.id}")
+            await self.save_state()
+            return
+
+        # CASE 3 — update old message
+        try:
+            old = await self.channel_obj.fetch_message(self.cfapi_message[1])
+            await old.edit(embed=embed)
+            self.log_debug(f"Updated CFAPI message {self.cfapi_message[1]}")
+        except Exception as e:
+            self.log_debug(f"Could not edit CFAPI message: {e}")
+            msg = await self.channel_obj.send(embed=embed)
+            self.cfapi_message = (self.channel_obj.id, msg.id)
+            self.log_debug(f"Resent CFAPI message {msg.id}")
+
+        await self.save_state()
+
 
     async def ping_host(self, host):
         count_flag = "-n" if platform.system().lower() == "windows" else "-c"
@@ -253,6 +322,7 @@ class PStreamStatus(commands.Cog):
         backend_status = await self.ping_host(BACKEND_HOST)
         weblate_status = await self.check_weblate_status()
         feed_statuses = await self.get_feed_statuses()
+        cfapi_status = await self.check_cfapi_status()
 
         # Main embed
         embed = self.create_embed(cf_status, backend_status, weblate_status)
@@ -300,6 +370,7 @@ class PStreamStatus(commands.Cog):
                 self.last_fedapi_message = None
 
         # Save state after updating messages
+        await self.handle_cfapi_status(cfapi_status)
         await self.save_state()
 
     @commands.group(invoke_without_command=True)
