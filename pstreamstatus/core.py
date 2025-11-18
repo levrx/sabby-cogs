@@ -323,6 +323,7 @@ class PStreamStatus(commands.Cog):
         weblate_status = await self.check_weblate_status()
         feed_statuses = await self.get_feed_statuses()
         cfapi_status = await self.check_cfapi_status()
+        self.log_debug(f"CFAPI STATUS RAW: {cfapi_status}")
 
         # Main embed
         embed = self.create_embed(cf_status, backend_status, weblate_status)
