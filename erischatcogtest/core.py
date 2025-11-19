@@ -185,13 +185,16 @@ class Chat(BaseCog):
 
             # handle response safely
             try:
-                parts = data["candidates"][0]["content"]["parts"]
-                if parts and isinstance(parts[0], dict) and "text" in parts[0]:
-                    reply = parts[0]["text"].strip()
-                elif parts and isinstance(parts[0], str):
-                    reply = parts[0].strip()
-                else:
+                candidates = data.get("candidates", [])
+                if not candidates:
                     reply = "I couldn't generate a response."
+                else:
+                    content = candidates[0].get("content", {})
+                    parts = content.get("parts", [])
+                    if not parts:
+                        reply = "I couldn't generate a response."
+                    else:
+                        reply = parts[0].get("text", "I couldn't generate a response.").strip()
             except Exception as e:
                 print("Error parsing Gemini response:", e, data)
                 reply = "I couldn't generate a response."
@@ -205,7 +208,7 @@ class Chat(BaseCog):
         except Exception as e:
             await channel.send("Error contacting the AI.")
             print(f"Gemini request error: {e}")
-        
+            
 @commands.Cog.listener()
 async def on_message(self, message: discord.Message):
     if message.author.bot or message.author == self.bot.user:
