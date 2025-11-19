@@ -123,59 +123,66 @@ async def construct_async_query(query: List[Dict], token: str, **kwargs) -> list
     return response
 
 
-async def async_cablyai_client_and_query(token: str, messages: str | list[dict], **kwargs):
-    import aiohttp, io, base64
+async def async_cablyai_client_and_query(
+    token: str, messages: list[dict], model: str = "gemini-2.5-flash"
+) -> str:
+    """
+    Send a query to Gemini API and return the generated text response.
+    
+    Args:
+        token: Your x-goog-api-key string.
+        messages: A list of message dicts, each with 'role' and 'content'.
+        model: Model to use, defaults to 'gemini-2.5-flash'.
+    
+    Returns:
+        The AI-generated text response as a string.
+    """
+    BASE_URL = "https://gemini.aether.mom/v1beta"
+    url = f"{BASE_URL}/models/{model}:generateContent"
+
+    # Gemini payload format based on working curl
+    contents = []
+    for msg in messages:
+        role = msg.get("role", "user")
+        content_text = msg.get("content", "")
+        # Gemini expects 'parts' to be a dict, not a list
+        contents.append({
+            "role": role,
+            "parts": {"text": content_text}  # note: not a list
+        })
+
+    payload = {
+        "contents": contents,
+        "generationConfig": {
+            "maxOutputTokens": 1500
+        }
+    }
 
     headers = {
         "Content-Type": "application/json",
         "x-goog-api-key": "limon87"
     }
 
-    url = (
-        "https://gemini.aether.mom/v1beta/models/gemini-2.0-flash-vision:generateImage"
-        if "model" in kwargs and kwargs["model"].startswith("dall")
-        else f"https://gemini.aether.mom/v1beta/models/{kwargs.get('model', 'gemini-2.5-flash')}:generateContent"
-    )
-
-    # Convert messages to Gemini 'contents' format
-    if isinstance(messages, str):
-        contents = [{"role": "user", "parts": [{"text": messages}]}]
-    else:
-        contents = [
-            {
-                "role": msg.get("role", "user"),
-                "parts": [{"text": msg.get("content", "")}]
-            }
-            for msg in messages
-        ]
-
-    payload = {
-        "contents": contents,
-        "generationConfig": {}
-    }
-
-    if "temperature" in kwargs:
-        payload["generationConfig"]["temperature"] = kwargs["temperature"]
-    if "max_tokens" in kwargs:
-        payload["generationConfig"]["maxOutputTokens"] = kwargs["max_tokens"]
-
     async with aiohttp.ClientSession() as session:
         async with session.post(url, headers=headers, json=payload) as response:
-            if response.status == 200:
-                result = await response.json()
-                if url.endswith("images"):
-                    results = []
-                    for encoded_image in result["data"]:
-                        image = base64.b64decode(encoded_image["b64_json"])
-                        buf = io.BytesIO()
-                        buf.write(image)
-                        buf.seek(0)
-                        results.append(buf)
-                    return results[0] if len(results) == 1 else results
-                else:
-                    return result["candidates"][0]["content"]["parts"][0]["text"]
-            else:
-                raise ValueError(f"Failed Gemini request: {response.status}, {await response.text()}")
+            if response.status != 200:
+                text = await response.text()
+                raise ValueError(f"Failed Gemini request: {response.status}, {text}")
+
+            data = await response.json()
+
+    try:
+        # Extract the first candidate's text
+        reply = data["candidates"][0]["content"]["parts"]["text"].strip()
+    except (KeyError, IndexError) as e:
+        print("Error parsing Gemini response:", e, data)
+        reply = "I couldn't generate a response."
+
+    # Discord message limit
+    if len(reply) > 2000:
+        reply = reply[:1997] + "..."
+
+    return reply
 
 def pagify_chat_result(response: str) -> list[str]:
     if len(response) <= 2000:
