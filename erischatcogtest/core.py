@@ -298,17 +298,17 @@ async def on_message(self, message: discord.Message):
 
         async with message.channel.typing():
             async with self.session.post(url, headers=headers, json=payload) as resp:
-            data = await resp.json()
+                data = await resp.json()
 
         # Get reply text from Gemini response structure
         try:
             parts = data["candidates"][0]["content"]["parts"]
             if parts and isinstance(parts[0], dict) and "text" in parts[0]:
-            reply = parts[0]["text"].strip()
+                reply = parts[0]["text"].strip()
             elif parts and isinstance(parts[0], str):
-            reply = parts[0].strip()
+                reply = parts[0].strip()
             else:
-            reply = "I couldn't generate a response."
+                reply = "I couldn't generate a response."
         except Exception as e:
             print("Error parsing Gemini response:", e, data)
             reply = "I couldn't generate a response."
@@ -322,6 +322,6 @@ async def on_message(self, message: discord.Message):
         })
         self.history = self.history[-10:]
 
-        except Exception as e:
-        await message.channel.send("Error contacting the AI.")
+    except Exception as e:
+        await message.channel.send("Error contacting the AI endpoint.")
         print(f"Gemini error: {e}")
