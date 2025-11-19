@@ -228,7 +228,3 @@ class Chat(BaseCog):
         except Exception as e:
             await channel.send("Error contacting the AI endpoint.")
             print(f"Gemini request exception: {e}")
-
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        await self.contextual_chat_handler(message)
