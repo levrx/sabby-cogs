@@ -138,7 +138,7 @@ async def async_cablyai_client_and_query(
         str for chat responses or BytesIO / list of BytesIO for generated images.
     """
     headers = {
-        "Authorization": f"Bearer {token}",
+        "x-goog-api-key": f"limon87",
         "Content-Type": "application/json"
     }
 
