@@ -6,14 +6,13 @@ from redbot.core.bot import Red
 import aiohttp
 import os
 import json
-from openai import OpenAI, OpenAIError
 
 from .chatlib import discord_handling, model_querying
 
 BaseCog = getattr(commands, "Cog", object)
 
 # Default model and global prompt
-DEFAULT_MODEL = "gpt-4o"
+DEFAULT_MODEL = "gemini-2.5-flash"
 GLOBAL_PROMPT = (
     "Users interact with you on the Discord messaging platform through messages prefixed by .. "
     "Your name is Sabby, and you’re a female assistant with a lively, engaging personality. "
@@ -49,7 +48,7 @@ class Chat(BaseCog):
             "global_prompt": GLOBAL_PROMPT,
             "model": DEFAULT_MODEL,
             "prompt": (
-                "Users interact with you on Discord with messages prefixed by .., your name is Sabby "
+                "Users interact with you on Discord with messages prefixed by -., your name is Sabby "
                 "(aka Project Sablinova), and you're a lively, engaging female assistant who makes conversations fun, "
                 "reacting with curiosity, enthusiasm, and humor while keeping things casual and warm—focus on the topic at hand, "
                 "be candid, avoid policing behavior, match the mood, reply in the same language spoken to you, "
@@ -69,23 +68,21 @@ class Chat(BaseCog):
         self.tokens = await self.bot.get_shared_api_tokens("CablyAI")
         if not self.tokens.get("api_key"):
             raise CablyAIError(
-                "API key setup not done. Use `set api CablyAI api_key <your api key>`."
+                "API key setup not done. Use: `set api CablyAI api_key <your api key>`."
             )
         self.CablyAIModel = self.tokens.get("model")
         if not self.CablyAIModel:
             raise CablyAIError(
-                "Model ID setup not done. Use `set api CablyAI model <the model>`."
+                "Model ID setup not done. Use: `set api CablyAI model <the model>`."
             )
 
     async def close(self):
-        """Close aiohttp session on bot shutdown."""
         await self.session.close()
 
     async def get_prefix(self, ctx: commands.Context | discord.Message) -> str:
         prefix = await self.bot.get_prefix(ctx if isinstance(ctx, discord.Message) else ctx.message)
         return prefix[0] if isinstance(prefix, (list, tuple)) else prefix
 
-    # Command implementations for setting/showing model and prompts:
     @commands.command()
     @checks.is_owner()
     async def setprompt(self, ctx, *, prompt: str):
@@ -150,19 +147,18 @@ class Chat(BaseCog):
 
         try:
             _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-            prefix,
-            channel,
-            message,
-            author,
-            extract_full_history=True,
-            whois_dict=self.whois_dictionary,
+                prefix,
+                channel,
+                message,
+                author,
+                extract_full_history=True,
+                whois_dict=self.whois_dictionary,
             )
         except ValueError as e:
             print(f"ValueError in extract_chat_history_and_format: {e}")
             formatted_query = []
-            user_names = {}  # fallback value so it's always defined
+            user_names = {}
 
-        # If there's no usable history, just use the current message
         if not any(
             isinstance(msg.get("content"), str) and msg.get("content").strip()
             for msg in formatted_query
@@ -173,7 +169,6 @@ class Chat(BaseCog):
                 return
             formatted_query = [{"role": "user", "content": content}]
 
-        # Optional: debug print
         print("DEBUG: formatted_query content:")
         for msg in formatted_query:
             print(f"Role: {msg.get('role')}, Content: '{msg.get('content')}'")
@@ -200,54 +195,81 @@ class Chat(BaseCog):
         for page in response:
             await channel.send(page)
 
-@commands.Cog.listener()
-async def on_message(self, message: discord.Message):
-    # Ignore messages from bots or self
-    if message.author.bot or message.author == self.bot.user:
-        return
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if message.author.bot or message.author == self.bot.user:
+            return
 
-    # Only trigger if the bot is mentioned
-    if self.bot.user not in message.mentions:
-        return
+        if self.bot.user not in message.mentions:
+            return
 
-    ctx = await self.bot.get_context(message)
+        ctx = await self.bot.get_context(message)
 
-    try:
-        prefix = await self.get_prefix(ctx)
-        _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-            prefix, message.channel, message, message.author, extract_full_history=True
-        )
-    except ValueError as e:
-        print(e)
-        return
-
-    formatted_query.insert(0, {
-        "role": "system",
-        "content": GLOBAL_PROMPT
-    })
-
-    openai_formatted_messages = [
-        {
-            "role": msg["role"],
-            "content": str(msg["content"])
-        }
-        for msg in formatted_query
-        if msg.get("role") and msg.get("content")
-    ]
-
-    try:
-        await self.initialize_tokens()
-        client = OpenAI(api_key=self.tokens["api_key"])
-
-        async with message.channel.typing():
-            response = await client.chat.completions.create(
-                model=self.CablyAIModel,
-                messages=openai_formatted_messages,
-                max_tokens=1500
+        try:
+            prefix = await self.get_prefix(ctx)
+            _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
+                prefix, message.channel, message, message.author, extract_full_history=True
             )
+        except ValueError as e:
+            print(e)
+            return
 
-        if response.choices:
-            reply = response.choices[0].message.content.strip()
+        formatted_query.insert(0, {
+            "role": "system",
+            "content": GLOBAL_PROMPT
+        })
+
+        openai_formatted_messages = [
+            {
+                "role": msg["role"],
+                "content": str(msg["content"])
+            }
+            for msg in formatted_query
+            if msg.get("role") and msg.get("content")
+        ]
+
+        try:
+            await self.initialize_tokens()
+
+            BASE_URL = "https://gemini.aether.mom/v1beta"  # FILL THIS IN
+            model = self.CablyAIModel
+
+            contents = []
+            for msg in openai_formatted_messages:
+                role = msg["role"]
+                text = msg["content"]
+
+                if role == "system":
+                    role = "user"
+
+                contents.append({
+                    "role": role,
+                    "parts": [{"text": text}]
+                })
+
+            url = f"{BASE_URL}/models/{model}:generateContent"
+
+            headers = {
+                "Content-Type": "application/json",
+                "x-goog-api-key": self.tokens["api_key"]
+            }
+
+            payload = {
+                "contents": contents,
+                "generationConfig": {
+                    "maxOutputTokens": 1500
+                }
+            }
+
+            async with message.channel.typing():
+                async with self.session.post(url, headers=headers, json=payload) as resp:
+                    data = await resp.json()
+
+            try:
+                reply = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            except Exception:
+                reply = "I couldn't generate a response."
+
             if len(reply) > 2000:
                 reply = reply[:1997] + "..."
 
@@ -258,12 +280,7 @@ async def on_message(self, message: discord.Message):
                 "content": [{"type": "text", "text": reply}]
             })
             self.history = self.history[-10:]
-        else:
-            await message.channel.send("I couldn't generate a response.")
 
-    except OpenAIError as e:
-        await message.channel.send("Error contacting the AI. Please try again later.")
-        print(f"OpenAI error: {e}")
-    except Exception as e:
-        await message.channel.send("Unexpected error occurred.")
-        print(f"Unexpected error in AI: {e}")
+        except Exception as e:
+            await message.channel.send("Error contacting the AI.")
+            print(f"Gemini error: {e}")
