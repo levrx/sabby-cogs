@@ -177,7 +177,7 @@ class Chat(BaseCog):
 
         try:
             await self.initialize_tokens()
-            url = f"https://gemini.aether.mom/v1beta/models/{self.CablyAIModel}:generateContent"
+            url = f"https://gemini.aether.mom/v1beta/models/{DEFAULT_MODEL}:generateContent"
             headers = {"Content-Type": "application/json", "x-goog-api-key": self.tokens["api_key"]}
 
             async with self.session.post(url, headers=headers, json={"contents": contents}) as resp:
