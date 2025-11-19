@@ -123,18 +123,37 @@ async def construct_async_query(query: List[Dict], token: str, **kwargs) -> list
     return response
 
 
-async def async_cablyai_client_and_query(token: str, messages: str | list[dict], **kwargs) -> str | io.BytesIO | list[io.BytesIO]:
+async def async_cablyai_client_and_query(
+    token: str, messages: str | list[dict], **kwargs
+) -> str | io.BytesIO | list[io.BytesIO]:
+    """
+    Query Gemini endpoints with OAuth2 Bearer token.
+
+    Args:
+        token: OAuth2 access token.
+        messages: Either a string (single message) or a list of dicts for conversation history.
+        kwargs: Optional params like 'model', 'temperature', 'max_tokens'.
+
+    Returns:
+        str for chat responses or BytesIO / list of BytesIO for generated images.
+    """
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
 
-    url = (
-        "https://gemini.aether.mom/v1beta/models/gemini-2.0-flash-vision:generateImage" if "model" in kwargs and kwargs["model"].startswith("dall")
-        else "https://gemini.aether.mom/v1beta/models/gemini-2.5-flash:generateContent"
-    )
+    # Determine endpoint
+    if "model" in kwargs and kwargs["model"].startswith("dall"):
+        url = "https://gemini.aether.mom/v1beta/models/gemini-2.0-flash-vision:generateImage"
+    else:
+        url = "https://gemini.aether.mom/v1beta/models/gemini-2.5-flash:generateContent"
 
-    payload = {"model": kwargs.get("model"), "messages": messages, "stream": False}
+    # Construct payload
+    payload = {
+        "model": kwargs.get("model"),
+        "messages": messages,
+        "stream": False
+    }
     if "temperature" in kwargs:
         payload["temperature"] = kwargs["temperature"]
     if "max_tokens" in kwargs:
@@ -144,17 +163,23 @@ async def async_cablyai_client_and_query(token: str, messages: str | list[dict],
         async with session.post(url, headers=headers, json=payload) as response:
             if response.status == 200:
                 result = await response.json()
+                # Image generation
                 if url.endswith("images"):
                     results = []
-                    for encoded_image in result["data"]:
+                    for encoded_image in result.get("data", []):
                         image = base64.b64decode(encoded_image["b64_json"])
                         buf = io.BytesIO()
                         buf.write(image)
                         buf.seek(0)
                         results.append(buf)
                     return results[0] if len(results) == 1 else results
+                # Chat completion
                 else:
-                    return result["choices"][0]["message"]["content"]
+                    # Gemini v2.5-flash uses 'candidates' list with content parts
+                    try:
+                        return result["candidates"][0]["content"]["parts"][0]["text"]
+                    except (KeyError, IndexError):
+                        raise ValueError(f"Unexpected Gemini response structure: {result}")
             else:
                 raise ValueError(f"Failed Gemini request: {response.status}, {await response.text()}")
 
