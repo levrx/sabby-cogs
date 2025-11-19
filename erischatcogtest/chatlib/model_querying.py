@@ -130,8 +130,8 @@ async def async_cablyai_client_and_query(token: str, messages: str | list[dict],
     }
 
     url = (
-        "https://api.zukijourney.com/v1/images/generations" if "model" in kwargs and kwargs["model"].startswith("dall")
-        else "https://api.zukijourney.com/v1/chat/completions"
+        "https://gemini.aether.mom/v1beta/models/gemini-2.0-flash-vision:generateImage" if "model" in kwargs and kwargs["model"].startswith("dall")
+        else "https://gemini.aether.mom/v1beta/models/gemini-2.5-flash:generateContent"
     )
 
     payload = {"model": kwargs.get("model"), "messages": messages, "stream": False}
@@ -156,7 +156,7 @@ async def async_cablyai_client_and_query(token: str, messages: str | list[dict],
                 else:
                     return result["choices"][0]["message"]["content"]
             else:
-                raise ValueError(f"Failed ZukiAI request: {response.status}, {await response.text()}")
+                raise ValueError(f"Failed Gemini request: {response.status}, {await response.text()}")
 
 
 def pagify_chat_result(response: str) -> list[str]:
