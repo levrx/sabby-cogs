@@ -129,72 +129,105 @@ class Chat(BaseCog):
             final_dict[guild_name] = await whois_config.guild(guild).whois_dict() or {}
         self.whois_dictionary = final_dict
 
-    async def contextual_chat_handler(self, message: discord.Message):
-        if message.author.bot:
-            return
+async def contextual_chat_handler(self, message: discord.Message):
+    if message.author.bot:
+        return
 
-        ctx = await self.bot.get_context(message)
-        channel = ctx.channel
-        author = message.author
+    ctx = await self.bot.get_context(message)
+    channel = ctx.channel
+    author = message.author
 
-        if self.bot.user not in message.mentions:
-            return
+    if self.bot.user not in message.mentions:
+        return
 
-        if self.whois_dictionary is None:
-            await self.reset_whois_dictionary()
+    if self.whois_dictionary is None:
+        await self.reset_whois_dictionary()
 
-        prefix = await self.get_prefix(ctx)
+    prefix = await self.get_prefix(ctx)
 
-        try:
-            _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-                prefix,
-                channel,
-                message,
-                author,
-                extract_full_history=True,
-                whois_dict=self.whois_dictionary,
-            )
-        except ValueError as e:
-            print(f"ValueError in extract_chat_history_and_format: {e}")
-            formatted_query = []
-            user_names = {}
-
-        if not any(
-            isinstance(msg.get("content"), str) and msg.get("content").strip()
-            for msg in formatted_query
-        ):
-            content = message.clean_content.replace(f"<@{self.bot.user.id}>", "").strip()
-            if not content:
-                await channel.send("Please say something after mentioning me!")
-                return
-            formatted_query = [{"role": "user", "content": content}]
-
-        print("DEBUG: formatted_query content:")
-        for msg in formatted_query:
-            print(f"Role: {msg.get('role')}, Content: '{msg.get('content')}'")
-
-        try:
-            await self.initialize_tokens()
-        except CablyAIError as e:
-            await channel.send(str(e))
-            return
-
-        api_key = self.tokens.get("api_key")
-        model = self.CablyAIModel
-        prompt = await self.config.guild(ctx.guild).prompt()
-
-        response = await model_querying.query_text_model(
-            api_key,
-            prompt,
-            formatted_query,
-            model=model,
-            user_names=user_names,
-            contextual_prompt="Respond as though involved in the conversation, with a matching tone."
+    try:
+        _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
+            prefix,
+            channel,
+            message,
+            author,
+            extract_full_history=True,
+            whois_dict=self.whois_dictionary,
         )
+    except ValueError as e:
+        print(f"ValueError in extract_chat_history_and_format: {e}")
+        formatted_query = []
+        user_names = {}
 
-        for page in response:
-            await channel.send(page)
+    if not any(
+        isinstance(msg.get("content"), str) and msg.get("content").strip()
+        for msg in formatted_query
+    ):
+        content = message.clean_content.replace(f"<@{self.bot.user.id}>", "").strip()
+        if not content:
+            await channel.send("Please say something after mentioning me!")
+            return
+        formatted_query = [{"role": "user", "content": content}]
 
+    print("DEBUG: formatted_query content:")
+    for msg in formatted_query:
+        print(f"Role: {msg.get('role')}, Content: '{msg.get('content')}'")
+
+    try:
+        await self.initialize_tokens()
+    except CablyAIError as e:
+        await channel.send(str(e))
+        return
+
+    api_key = self.tokens.get("api_key")
+    model = self.CablyAIModel
+
+    # Prepare messages for Gemini (convert role -> user/model as needed)
+    contents = []
+    for msg in formatted_query:
+        role = msg.get("role", "user")
+        if role == "system":
+            role = "user"
+        contents.append({
+            "role": role,
+            "parts": [{"text": msg["content"]}]
+        })
+
+    # Call the Gemini client
+    try:
+        async with self.session.post(
+            f"https://gemini.aether.mom/v1beta/models/{model}:generateContent",
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": api_key
+            },
+            json={"contents": contents}
+        ) as resp:
+            data = await resp.json()
+
+        # Extract text from first candidate
+        try:
+            reply = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        except Exception as e:
+            print("Error parsing Gemini response:", e, data)
+            reply = "I couldn't generate a response."
+
+        if len(reply) > 2000:
+            reply = reply[:1997] + "..."
+
+        await channel.send(reply)
+
+        # Keep short history
+        self.history.append({
+            "role": "assistant",
+            "content": [{"type": "text", "text": reply}]
+        })
+        self.history = self.history[-10:]
+
+    except Exception as e:
+        await channel.send("Error contacting the AI.")
+        print(f"Gemini request error: {e}")
+        
 @commands.Cog.listener()
 async def on_message(self, message: discord.Message):
     if message.author.bot or message.author == self.bot.user:
