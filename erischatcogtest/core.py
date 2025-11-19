@@ -175,7 +175,7 @@ class Chat(BaseCog):
 
         api_key = self.tokens.get("api_key")
         model = self.CablyAIModel
-        url = f"https://gemini.aether.mom/v1beta/models/{model}:generateContent"
+        url = f"https://gemini.aether.mom/v1beta/models/{DEFAULT_MODEL}:generateContent"
         headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
         payload = {"contents": contents}
 
