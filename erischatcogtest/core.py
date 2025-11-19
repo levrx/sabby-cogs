@@ -195,92 +195,97 @@ class Chat(BaseCog):
         for page in response:
             await channel.send(page)
 
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        if message.author.bot or message.author == self.bot.user:
-            return
+@commands.Cog.listener()
+async def on_message(self, message: discord.Message):
+    if message.author.bot or message.author == self.bot.user:
+        return
 
-        if self.bot.user not in message.mentions:
-            return
+    if self.bot.user not in message.mentions:
+        return
 
-        ctx = await self.bot.get_context(message)
+    ctx = await self.bot.get_context(message)
 
-        try:
-            prefix = await self.get_prefix(ctx)
-            _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
-                prefix, message.channel, message, message.author, extract_full_history=True
-            )
-        except ValueError as e:
-            print(e)
-            return
+    try:
+        prefix = await self.get_prefix(ctx)
+        _, formatted_query, user_names = await discord_handling.extract_chat_history_and_format(
+            prefix, message.channel, message, message.author, extract_full_history=True
+        )
+    except ValueError as e:
+        print(e)
+        return
 
-        formatted_query.insert(0, {
-            "role": "system",
-            "content": GLOBAL_PROMPT
-        })
+    formatted_query.insert(0, {
+        "role": "system",
+        "content": GLOBAL_PROMPT
+    })
 
-        openai_formatted_messages = [
-            {
-                "role": msg["role"],
-                "content": str(msg["content"])
-            }
-            for msg in formatted_query
-            if msg.get("role") and msg.get("content")
-        ]
+    openai_formatted_messages = [
+        {
+            "role": msg["role"],
+            "content": str(msg["content"])
+        }
+        for msg in formatted_query
+        if msg.get("role") and msg.get("content")
+    ]
 
-        try:
-            await self.initialize_tokens()
+    try:
+        await self.initialize_tokens()
 
-            BASE_URL = "https://gemini.aether.mom/v1beta"  # FILL THIS IN
-            model = self.CablyAIModel
+        BASE_URL = "https://gemini.aether.mom/v1beta"
+        model = self.CablyAIModel
 
-            contents = []
-            for msg in openai_formatted_messages:
-                role = msg["role"]
-                text = msg["content"]
+        # Convert your formatted messages → Gemini payload
+        contents = []
+        for msg in openai_formatted_messages:
+            role = msg["role"]
+            text = msg["content"]
 
-                if role == "system":
-                    role = "user"
+            # Gemini only uses user + model, no system
+            if role == "system":
+                role = "user"
 
-                contents.append({
-                    "role": role,
-                    "parts": [{"text": text}]
-                })
-
-            url = f"{BASE_URL}/models/{model}:generateContent"
-
-            headers = {
-                "Content-Type": "application/json",
-                "x-goog-api-key": self.tokens["api_key"]
-            }
-
-            payload = {
-                "contents": contents,
-                "generationConfig": {
-                    "maxOutputTokens": 1500
-                }
-            }
-
-            async with message.channel.typing():
-                async with self.session.post(url, headers=headers, json=payload) as resp:
-                    data = await resp.json()
-
-            try:
-                reply = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-            except Exception:
-                reply = "I couldn't generate a response."
-
-            if len(reply) > 2000:
-                reply = reply[:1997] + "..."
-
-            await message.channel.send(reply)
-
-            self.history.append({
-                "role": "assistant",
-                "content": [{"type": "text", "text": reply}]
+            contents.append({
+                "role": role,
+                "parts": [{"text": text}]
             })
-            self.history = self.history[-10:]
 
+        url = f"{BASE_URL}/models/{model}:generateContent"
+
+        headers = {
+            "Content-Type": "application/json",
+            "x-goog-api-key": self.tokens["api_key"]
+        }
+
+        payload = {
+            "contents": contents,
+            "generationConfig": {
+                "maxOutputTokens": 1500
+            }
+        }
+
+        async with message.channel.typing():
+            async with self.session.post(url, headers=headers, json=payload) as resp:
+                data = await resp.json()
+
+        # Get reply text from Gemini response structure
+        try:
+            reply = data["candidates"][0]["content"]["parts"][0]["text"].strip()
         except Exception as e:
-            await message.channel.send("Error contacting the AI.")
-            print(f"Gemini error: {e}")
+            print("Gemini parsing error:", e, data)
+            reply = "I couldn't generate a response."
+
+        if len(reply) > 2000:
+            reply = reply[:1997] + "..."
+
+        await message.channel.send(reply)
+
+        # Keep short history
+        self.history.append({
+            "role": "assistant",
+            "content": [{"type": "text", "text": reply}]
+        })
+        self.history = self.history[-10:]
+
+    except Exception as e:
+        await message.channel.send("Error contacting the AI.")
+        print(f"Gemini error: {e}")
