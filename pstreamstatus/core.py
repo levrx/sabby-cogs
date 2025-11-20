@@ -203,17 +203,18 @@ class PStreamStatus(commands.Cog):
                 try:
                     async with session.get(url, timeout=5) as resp:
                         json_data = await resp.json()
+                        status_data = json_data.get("status", {})
 
                         # Ping the actual feed endpoint
                         ping_status, _ = await self.ping_host("fed-api.pstream.mov")
 
                         results[name] = {
-                            "total": json_data.get("total_requests", "N/A"),
-                            "succeeded": json_data.get("successful", "N/A"),
-                            "failed": json_data.get("failed", "N/A"),
+                            "total": status_data.get("total_requests", "N/A"),
+                            "succeeded": status_data.get("successful", "N/A"),
+                            "failed": status_data.get("failed", "N/A"),
                             "ping_status": ping_status,
                         }
-                        debug_info[name] = json.dumps(json_data, indent=2)
+                        debug_info[name] = json.dumps(status_data, indent=2)
 
                 except Exception as e:
                     results[name] = {
