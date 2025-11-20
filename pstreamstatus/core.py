@@ -16,8 +16,7 @@ CLOUDFLARE_API_MESSAGE_ID = ""
 BACKEND_HOST = "server.fifthwit.net"
 WEBLATE_HOST = "weblate.pstream.mov"
 FEED_REGIONS = [
-    ("FED API", "https://fed-api.pstream.mov/status/data"),
-    ("CIA API", "https://server.fifthwit.net/metrics"),
+    ("FED API", "https://fed-api.pstream.mov/stats")
 ]
 
 class PStreamStatus(commands.Cog):
@@ -203,48 +202,18 @@ class PStreamStatus(commands.Cog):
             for name, url in FEED_REGIONS:
                 try:
                     async with session.get(url, timeout=5) as resp:
-                        text_data = await resp.text()
+                        json_data = await resp.json()
 
-                        if name == "CIA API":
-                            # Parse providers metrics
-                            succeeded = failed = 0
-                            for line in text_data.splitlines():
-                                if 'mw_provider_status_count{provider_id="cia-api",status="success"}' in line:
-                                    try:
-                                        succeeded = int(line.split()[-1])
-                                    except ValueError:
-                                        succeeded = 0
-                                elif 'mw_provider_status_count{provider_id="cia-api",status="failed"}' in line:
-                                    try:
-                                        failed = int(line.split()[-1])
-                                    except ValueError:
-                                        failed = 0
-                            total = succeeded + failed
+                        # Ping the actual feed endpoint
+                        ping_status, _ = await self.ping_host("fed-api.pstream.mov")
 
-                            # Ping a separate endpoint (placeholder for now)
-                            ping_status, _ = await self.ping_host("febbox.andresdev.org")
-
-                            results[name] = {
-                                "succeeded": succeeded,
-                                "failed": failed,
-                                "total": total,
-                                "ping_status": ping_status,
-                            }
-                            debug_info[name] = text_data
-
-                        else:  # FED API
-                            json_data = await resp.json()
-
-                            # Ping the actual feed endpoint
-                            ping_status, _ = await self.ping_host("fed-api.pstream.mov")
-
-                            results[name] = {
-                                "total": json_data.get("total", "N/A"),
-                                "succeeded": json_data.get("succeeded", "N/A"),
-                                "failed": json_data.get("failed", "N/A"),
-                                "ping_status": ping_status,
-                            }
-                            debug_info[name] = json.dumps(json_data, indent=2)
+                        results[name] = {
+                            "total": json_data.get("total_requests", "N/A"),
+                            "succeeded": json_data.get("successful", "N/A"),
+                            "failed": json_data.get("failed", "N/A"),
+                            "ping_status": ping_status,
+                        }
+                        debug_info[name] = json.dumps(json_data, indent=2)
 
                 except Exception as e:
                     results[name] = {
