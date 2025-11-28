@@ -117,6 +117,116 @@ class Chat(BaseCog):
         model = await self.config.guild(ctx.guild).model()
         await ctx.send(model or "No model set.")
 
+    def _banned_file_path(self) -> str:
+        return os.path.join(self.data_dir, "banned.json")
+
+    def _load_banned(self) -> dict:
+        path = self._banned_file_path()
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if not isinstance(data, dict):
+                    return {"channels": [], "guilds": []}
+                data.setdefault("channels", [])
+                data.setdefault("guilds", [])
+                return data
+        except FileNotFoundError:
+            return {"channels": [], "guilds": []}
+        except Exception:
+            return {"channels": [], "guilds": []}
+
+    def _save_banned(self, data: dict) -> None:
+        path = self._banned_file_path()
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except Exception:
+            pass
+
+    @commands.command()
+    @checks.is_owner()
+    async def banai(self, ctx, scope: str = "channel"):
+        """Ban the AI from the current `channel` or entire `guild`.
+
+        Usage: `!banai channel` or `!banai guild`
+        """
+        banned = self._load_banned()
+        if scope.lower() in ("channel", "chan", "c"):
+            cid = ctx.channel.id
+            if cid in banned.get("channels", []):
+                await ctx.send("This channel is already banned.")
+                return
+            banned.setdefault("channels", []).append(cid)
+            self._save_banned(banned)
+            await ctx.send(f"Banned AI in this channel (`{cid}`).")
+            return
+        if scope.lower() in ("guild", "server", "g"):
+            if ctx.guild is None:
+                await ctx.send("This command must be run in a guild to ban the guild.")
+                return
+            gid = ctx.guild.id
+            if gid in banned.get("guilds", []):
+                await ctx.send("This guild is already banned.")
+                return
+            banned.setdefault("guilds", []).append(gid)
+            self._save_banned(banned)
+            await ctx.send(f"Banned AI in this guild (`{gid}`).")
+            return
+        await ctx.send("Invalid scope. Use `channel` or `guild`.")
+
+    @commands.command()
+    @checks.is_owner()
+    async def unbanai(self, ctx, scope: str = "channel"):
+        """Unban the AI from the current `channel` or entire `guild`.
+
+        Usage: `!unbanai channel` or `!unbanai guild`
+        """
+        banned = self._load_banned()
+        if scope.lower() in ("channel", "chan", "c"):
+            cid = ctx.channel.id
+            if cid not in banned.get("channels", []):
+                await ctx.send("This channel is not banned.")
+                return
+            banned["channels"].remove(cid)
+            self._save_banned(banned)
+            await ctx.send(f"Unbanned AI in this channel (`{cid}`).")
+            return
+        if scope.lower() in ("guild", "server", "g"):
+            if ctx.guild is None:
+                await ctx.send("This command must be run in a guild to unban the guild.")
+                return
+            gid = ctx.guild.id
+            if gid not in banned.get("guilds", []):
+                await ctx.send("This guild is not banned.")
+                return
+            banned["guilds"].remove(gid)
+            self._save_banned(banned)
+            await ctx.send(f"Unbanned AI in this guild (`{gid}`).")
+            return
+        await ctx.send("Invalid scope. Use `channel` or `guild`.")
+
+    @commands.command()
+    @checks.is_owner()
+    async def showbanned(self, ctx):
+        """Show currently banned channels and guilds."""
+        banned = self._load_banned()
+        channels = banned.get("channels", [])
+        guilds = banned.get("guilds", [])
+        msg_lines = []
+        if channels:
+            msg_lines.append("Banned channels:")
+            for c in channels:
+                msg_lines.append(f"- `{c}`")
+        else:
+            msg_lines.append("No banned channels.")
+        if guilds:
+            msg_lines.append("Banned guilds:")
+            for g in guilds:
+                msg_lines.append(f"- `{g}`")
+        else:
+            msg_lines.append("No banned guilds.")
+        await ctx.send("\n".join(msg_lines))
+
     async def reset_whois_dictionary(self):
         whois = self.bot.get_cog("WhoIs")
         if whois is None:
@@ -132,6 +242,16 @@ class Chat(BaseCog):
 
     async def contextual_chat_handler(self, message: discord.Message):
         if message.author.bot or self.bot.user not in message.mentions:
+            return
+
+        # Skip handling if this channel or guild is banned via banned.json
+        try:
+            banned = self._load_banned()
+        except Exception:
+            banned = {"channels": [], "guilds": []}
+        channel_id = message.channel.id
+        guild_id = message.guild.id if message.guild else None
+        if channel_id in banned.get("channels", []) or (guild_id and guild_id in banned.get("guilds", [])):
             return
 
         ctx = await self.bot.get_context(message)
