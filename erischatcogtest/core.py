@@ -12,7 +12,7 @@ from .chatlib import discord_handling, model_querying
 BaseCog = getattr(commands, "Cog", object)
 
 # Default model and global prompt
-DEFAULT_MODEL = "gemini-2.5-pro"
+DEFAULT_MODEL = "gemini-2.5-flash-lite"
 GLOBAL_PROMPT = (
     "Users interact with you on the Discord messaging platform through messages prefixed by .. "
     "Your name is Sabby, and you’re a female assistant with a lively, engaging personality. "
